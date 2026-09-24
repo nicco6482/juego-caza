@@ -10,7 +10,8 @@ Abre `index.html` con un servidor local (`python3 -m http.server`) y entra en `h
 - Animales que te oyen, te ven y te huelen según el viento: ciervo, gamo, corzo, jabalí, muflón, cabra montés, zorro y liebre; la cierva y el lobo ibérico están protegidos.
 - Zonas de impacto (corazón, pulmones, cabeza, cuello, cuerpo), rastro de sangre y cámara de bala.
 - Cinco armas (teclas 1-5 o rueda del ratón): rifle de cerrojo con visor, rifle de palanca, escopeta paralela, superpuesta y semiautomática.
-- Caza menor: perdiz roja, tórtola, zorzal, agachadiza y ánade real; con escopeta, ojeo de aves que entran a tiro.
+- Caza menor: perdiz roja, tórtola, zorzal, agachadiza, ánade real, cigüeña y flamenco; cada pocos segundos entra un bando a tiro.
+- Búfalo cafre (puede embestir) y gorila (protegido), fuera de lo habitual en la sierra.
 - Sala de trofeos: cada pieza queda catalogada con su peso, puntos CIC y medalla de oro, plata o bronce.
 - Rehala: 2 bracos húngaros y 3 podencos que levantan y cobran las aves, y 2 teckels que siguen el rastro de las piezas heridas.
 

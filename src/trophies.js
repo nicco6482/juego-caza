@@ -21,6 +21,10 @@ const TROPHY = {
   zorzal: { kg: [0.06, 0.1], small: true },
   agachadiza: { kg: [0.09, 0.13], small: true },
   pato: { kg: [0.9, 1.4], small: true },
+  ciguena: { kg: [2.3, 4.4], small: true },
+  flamenco: { kg: [2.5, 4], small: true },
+  bufalo: { measure: 'puntos SCI', base: 100, perClass: 8, spread: 6, medals: [100, 108, 116], kg: [500, 850] },
+  gorila: { kg: [120, 200] },
 };
 
 export const MEDALS = { oro: 'Oro', plata: 'Plata', bronce: 'Bronce' };

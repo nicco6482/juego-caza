@@ -377,6 +377,9 @@ export class Sfx {
       for (let i = 0; i < 3; i++) note(t + i * 0.6, 520, 470, 0.45, 'sine');
     } else if (kind === 'pato') {
       for (let i = 0; i < 3; i++) note(t + i * 0.28, 420, 330, 0.18, 'sawtooth', 2);
+    } else if (kind === 'flamenco') {
+      // Graznido nasal, como de ganso.
+      for (let i = 0; i < 4; i++) note(t + i * 0.22, 760 + Math.random() * 80, 620, 0.14, 'sawtooth', 2.5);
     } else if (kind === 'agachadiza') {
       note(t, 2200, 1700, 0.12, 'square', 4);
     }

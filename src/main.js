@@ -206,6 +206,13 @@ function boot() {
   fauna = new Fauna(scene, {
     onBleed: (a) => effects.bloodDrop(a.pos.x, a.pos.z, a.speed > 3 ? 1 : 1.6),
     onBledOut: onBledOut,
+    onCharge: (a) => {
+      if (game.state !== 'playing') return;
+      hud.banner('¡TE HA EMBESTIDO!', `${a.sp.name}: el animal más peligroso del monte`, 'bad');
+      sfx.thud(0, 2);
+      player.recoil += 0.3;
+      setTimeout(() => endHunt(`Te ha embestido un ${a.sp.name.toLowerCase()}.`), 1500);
+    },
     onRoar: (a) => {
       if (game.state !== 'playing') return;
       const pan = Math.sin(relativeBearing(a.pos));
@@ -237,7 +244,7 @@ function boot() {
       if (game.state !== 'playing') return;
       const d = b.pos.distanceTo(player.pos), pan = Math.sin(relativeBearing(b.pos));
       sfx.flush(d, pan, !!b.sp.duck);
-      if (b.key === 'perdiz' || b.key === 'pato' || b.key === 'agachadiza') sfx.birdCall(b.key, d, pan);
+      if (['perdiz', 'pato', 'agachadiza', 'flamenco'].includes(b.key)) sfx.birdCall(b.key, d, pan);
     },
   });
   makeBulletMesh();
@@ -312,8 +319,9 @@ function newHunt() {
   hud.setScore(0);
   hud.setStance('stand');
   refreshAmmo();
-  hud.feed('Temporada abierta: ciervo, gamo, corzo, jabalí, muflón, cabra montés, zorro y liebre.');
-  hud.feed('Protegidos: la cierva y el lobo ibérico.', 'bad');
+  hud.feed('Temporada abierta: ciervo, gamo, corzo, jabalí, muflón, cabra montés, búfalo, zorro y liebre.');
+  hud.feed('¡Ojo con el búfalo! Si lo hieres o te acercas mucho, puede embestir.', 'warn');
+  hud.feed('Protegidos: la cierva, el lobo ibérico y el gorila.', 'bad');
   hud.feed('Es época de berrea: escucha a los ciervos para saber dónde están.');
   hud.feed('Caza menor: perdiz, tórtola, zorzal, agachadiza y ánade. Con escopeta (3, 4 o 5) te entran al vuelo.');
   hud.feed('Te acompañan 2 bracos, 3 podencos y 2 teckels.');
@@ -867,6 +875,14 @@ function onBirdHit(bird, dist, b) {
   const sp = bird.sp;
   countHit(b.shot);
   hud.hitmark(true);
+  if (sp.protected) {
+    game.score -= sp.penalty;
+    hud.setScore(game.score);
+    game.log.push({ name: sp.name, note: 'Protegida', dist, pts: -sp.penalty });
+    hud.banner(`¡${sp.name.toUpperCase()} ${sp.fem ? 'PROTEGIDA' : 'PROTEGIDO'}!`, `Sanción de la guardería · −${sp.penalty}`, 'bad');
+    Trophies.record({ key: bird.key, name: sp.name, size: bird.scale, dist, weapon: WEAPONS[game.weapon].name, zone: 'Especie protegida', penalty: true });
+    return;
+  }
   const flying = bird.wasFlying;
   const pts = Math.round(sp.points * (flying ? 1.5 : 1) * (b.pellet ? 1 : 1.8) + dist * 0.5);
   const note = flying ? 'A vuelo' : 'Posada';
