@@ -265,7 +265,7 @@ html, body {
 #tip {
   position: absolute;
   left: 50%;
-  bottom: 110px;
+  bottom: 64px;
   transform: translateX(-50%);
   font-size: 13px;
   padding: 7px 14px;
@@ -492,14 +492,14 @@ button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-v
 #weapons {
   position: absolute;
   left: 50%;
-  bottom: 70px;
-  transform: translate(-50%, 10px);
+  bottom: 16px;
+  transform: translate(-50%, 0);
   display: flex;
   gap: 6px;
-  opacity: 0;
+  opacity: 0.55;
   transition: opacity 0.25s, transform 0.25s;
 }
-#weapons.show { opacity: 1; transform: translate(-50%, 0); }
+#weapons.show { opacity: 1; transform: translate(-50%, -4px); }
 #weapons div {
   font-size: 12px;
   padding: 6px 10px;

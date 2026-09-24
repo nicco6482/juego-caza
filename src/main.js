@@ -303,6 +303,7 @@ function newHunt() {
   for (const v of Object.values(views)) v.group.visible = false;
   rifle = views.rifle;
   dogs.reset(player.pos.x, player.pos.z);
+  hud.weaponBar(WEAPON_ORDER.map((k) => WEAPONS[k].short), 0);
   wind.baseAngle = Math.random() * Math.PI * 2;
   wind.baseSpeed = 1.5 + Math.random() * 4.5;
   updateWind(0);
