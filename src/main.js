@@ -234,10 +234,14 @@ function startHunt() {
 
 function lockPointer() {
   try {
-    const p = canvas.requestPointerLock && canvas.requestPointerLock();
-    if (p && p.catch) p.catch(() => {});
+    if (!canvas.requestPointerLock) {
+      game.lockFailed = true;
+      return;
+    }
+    const p = canvas.requestPointerLock();
+    if (p && p.catch) p.catch(() => (game.lockFailed = true));
   } catch {
-    /* navegador sin bloqueo de puntero */
+    game.lockFailed = true;
   }
 }
 
@@ -385,7 +389,7 @@ addEventListener('mouseup', (e) => {
 });
 addEventListener('mousemove', (e) => {
   if (game.state !== 'playing' || bulletCam.active) return;
-  if (!document.pointerLockElement) return;
+  if (!document.pointerLockElement && !game.lockFailed) return;
   const k = 0.0022 * settings.sens * (camera.fov / BASE_FOV);
   player.yaw -= e.movementX * k;
   player.pitch = clamp(player.pitch - e.movementY * k, -1.45, 1.45);
@@ -399,6 +403,10 @@ addEventListener('wheel', (e) => {
   }
 }, { passive: true });
 
+document.addEventListener('pointerlockerror', () => {
+  // Sin captura del ratón (p. ej. dentro de un iframe): se mira moviendo el ratón sin más.
+  game.lockFailed = true;
+});
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement) {
     game.hadLock = true;
