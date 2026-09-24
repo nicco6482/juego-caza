@@ -232,3 +232,110 @@ export function buildShotgun() {
   });
   return { group: g, bolt, muzzle, flash };
 }
+
+function viewKit() {
+  const wood = new THREE.MeshPhysicalMaterial({ map: woodTexture(), roughness: 0.4, clearcoat: 0.6, clearcoatRoughness: 0.2 });
+  const blued = new THREE.MeshStandardMaterial({ color: '#1b1d20', roughness: 0.3, metalness: 0.85 });
+  const steel = new THREE.MeshStandardMaterial({ color: '#9a968f', roughness: 0.3, metalness: 0.9 });
+  const black = new THREE.MeshStandardMaterial({ color: '#141516', roughness: 0.6, metalness: 0.3 });
+  const brass = new THREE.MeshStandardMaterial({ color: '#c09a55', roughness: 0.3, metalness: 0.9 });
+  const g = new THREE.Group();
+  const add = (geo, mat, pos = [0, 0, 0], rot = [0, 0, 0], parent = g) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(...pos);
+    m.rotation.set(...rot);
+    parent.add(m);
+    return m;
+  };
+  const finish = (muzzleZ, bolt, muzzleY = 0.012) => {
+    const muzzle = new THREE.Object3D();
+    muzzle.position.set(0, muzzleY, muzzleZ);
+    g.add(muzzle);
+    const flash = new THREE.PointLight('#ffb35c', 0, 6, 2);
+    flash.position.copy(muzzle.position);
+    g.add(flash);
+    g.traverse((o) => {
+      if (o.isMesh) {
+        o.castShadow = false;
+        o.receiveShadow = false;
+      }
+    });
+    return { group: g, bolt, muzzle, flash };
+  };
+  const stock = (pistol) => {
+    const secs = subdivide([
+      [0.6, -0.07, 0.02, 0.065], [0.56, -0.066, 0.022, 0.068], [0.4, -0.05, 0.02, 0.055], [0.24, -0.037, 0.017, 0.042],
+      [0.14, -0.032, 0.016, 0.036], [0.08, -0.022, 0.02, 0.03], [0.07, -0.02, 0.012, 0.012],
+    ].map(([z, y, w, h]) => ({ p: [0, y, z], w, h })), 4);
+    add(loft(secs, [0, 1, 0], 26, () => [1, 1, 1], 2.6, [1, 1.3]), wood);
+    add(new THREE.BoxGeometry(0.04, 0.13, 0.012), black, [0, -0.07, 0.606]);
+    if (pistol) {
+      add(loft(subdivide([
+        { p: [0, -0.04, 0.16], w: 0.016, h: 0.026 }, { p: [0, -0.09, 0.13], w: 0.015, h: 0.022 }, { p: [0, -0.115, 0.118], w: 0.008, h: 0.01 },
+      ], 4), [0, 0, 1], 18, () => [1, 1, 1], 2.4), wood);
+    }
+  };
+  const guard = (z = 0.05) => {
+    add(new THREE.TorusGeometry(0.024, 0.0032, 8, 24, Math.PI), blued, [0, -0.034, z], [0, Math.PI / 2, Math.PI]);
+    add(new THREE.TorusGeometry(0.011, 0.0028, 8, 14, Math.PI * 0.6), blued, [0, -0.03, z], [0, Math.PI / 2, Math.PI * 0.95]);
+  };
+  return { g, add, finish, stock, guard, wood, blued, steel, black, brass };
+}
+
+// Escopeta superpuesta: los dos cañones uno encima del otro, báscula plateada.
+export function buildOverUnder() {
+  const k = viewKit();
+  k.stock(true);
+  k.add(new THREE.BoxGeometry(0.042, 0.062, 0.1), k.steel, [0, -0.004, 0.02]);
+  k.add(loft(subdivide([
+    { p: [0, -0.024, -0.03], w: 0.02, h: 0.018 }, { p: [0, -0.026, -0.2], w: 0.021, h: 0.02 }, { p: [0, -0.024, -0.3], w: 0.016, h: 0.014 },
+  ], 3), [0, 1, 0], 18, () => [1, 1, 1], 2.3, [1, 1.3]), k.wood);
+  for (const y of [0.018, -0.006]) {
+    k.add(lathe([[0, 0], [0.0114, 0], [0.011, 0.3], [0.0098, 0.68], [0, 0.68]], 24), k.blued, [0, y, -0.03], [Math.PI, 0, 0]);
+  }
+  k.add(new THREE.BoxGeometry(0.009, 0.003, 0.66), k.blued, [0, 0.031, -0.37]);
+  k.add(new THREE.SphereGeometry(0.0028, 10, 8), k.steel, [0, 0.035, -0.7]);
+  k.guard();
+  return k.finish(-0.71, new THREE.Group(), 0.018);
+}
+
+// Escopeta semiautomática: un cañón con banda ventilada, cajón largo y depósito tubular.
+export function buildSemiAuto() {
+  const k = viewKit();
+  k.stock(true);
+  k.add(new THREE.BoxGeometry(0.04, 0.056, 0.2), k.black, [0, -0.002, -0.03]);
+  k.add(lathe([[0, 0], [0.012, 0], [0.0115, 0.3], [0.0105, 0.64], [0, 0.64]], 24), k.blued, [0, 0.014, -0.13], [Math.PI, 0, 0]);
+  k.add(lathe([[0, 0], [0.011, 0], [0.011, 0.34], [0, 0.34]], 20), k.blued, [0, -0.012, -0.13], [Math.PI, 0, 0]);
+  for (let i = 0; i < 16; i++) k.add(new THREE.BoxGeometry(0.006, 0.006, 0.006), k.blued, [0, 0.028, -0.14 - i * 0.038]);
+  k.add(new THREE.BoxGeometry(0.007, 0.003, 0.63), k.blued, [0, 0.032, -0.44]);
+  k.add(new THREE.SphereGeometry(0.003, 10, 8), k.brass, [0, 0.036, -0.76]);
+  k.add(loft(subdivide([
+    { p: [0, -0.02, -0.14], w: 0.02, h: 0.02 }, { p: [0, -0.022, -0.3], w: 0.021, h: 0.021 }, { p: [0, -0.02, -0.4], w: 0.016, h: 0.016 },
+  ], 3), [0, 1, 0], 18, () => [1, 1, 1], 2.3, [1, 1.3]), k.wood);
+  // Palanca de carga en el lateral: se mueve al disparar.
+  const bolt = new THREE.Group();
+  k.add(new THREE.BoxGeometry(0.02, 0.008, 0.01), k.steel, [0.028, 0.006, 0], [0, 0, 0], bolt);
+  k.g.add(bolt);
+  k.guard(0.04);
+  return k.finish(-0.77, bolt, 0.014);
+}
+
+// Rifle de palanca con miras abiertas (alza y punto).
+export function buildLever() {
+  const k = viewKit();
+  k.stock(false);
+  k.add(new THREE.BoxGeometry(0.036, 0.06, 0.16), k.blued, [0, -0.004, -0.02]);
+  k.add(lathe([[0, 0], [0.0105, 0], [0.01, 0.3], [0.0092, 0.56], [0, 0.56]], 24), k.blued, [0, 0.012, -0.1], [Math.PI, 0, 0]);
+  k.add(lathe([[0, 0], [0.008, 0], [0.008, 0.46], [0, 0.46]], 18), k.blued, [0, -0.01, -0.1], [Math.PI, 0, 0]);
+  k.add(new THREE.BoxGeometry(0.034, 0.028, 0.2), k.wood, [0, -0.012, -0.25]);
+  // Alza (con muesca) y punto de mira.
+  k.add(new THREE.BoxGeometry(0.014, 0.012, 0.004), k.blued, [-0.006, 0.027, -0.2]);
+  k.add(new THREE.BoxGeometry(0.014, 0.012, 0.004), k.blued, [0.006, 0.027, -0.2]);
+  k.add(new THREE.BoxGeometry(0.003, 0.014, 0.012), k.brass, [0, 0.026, -0.645]);
+  // Palanca: gira hacia abajo en cada disparo.
+  const lever = new THREE.Group();
+  lever.position.set(0, -0.03, 0.03);
+  k.add(new THREE.TorusGeometry(0.03, 0.004, 8, 24, Math.PI * 1.3), k.blued, [0, -0.012, 0.03], [0, Math.PI / 2, Math.PI * 0.85], lever);
+  k.g.add(lever);
+  return k.finish(-0.66, lever, 0.012);
+}

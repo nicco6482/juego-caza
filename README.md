@@ -9,7 +9,9 @@ Abre `index.html` con un servidor local (`python3 -m http.server`) y entra en `h
 - Balística con caída de la bala, rozamiento y deriva por viento, alza de 100 a 400 m y retícula mil-dot.
 - Animales que te oyen, te ven y te huelen según el viento: ciervo, gamo, corzo, jabalí, muflón, cabra montés, zorro y liebre; la cierva y el lobo ibérico están protegidos.
 - Zonas de impacto (corazón, pulmones, cabeza, cuello, cuerpo), rastro de sangre y cámara de bala.
-- Caza menor con escopeta paralela (tecla 2): perdiz roja, tórtola, zorzal, agachadiza y ánade real en el lago.
+- Cinco armas (teclas 1-5 o rueda del ratón): rifle de cerrojo con visor, rifle de palanca, escopeta paralela, superpuesta y semiautomática.
+- Caza menor: perdiz roja, tórtola, zorzal, agachadiza y ánade real; con escopeta, ojeo de aves que entran a tiro.
+- Rehala: 2 bracos húngaros y 3 podencos que levantan y cobran las aves, y 2 teckels que siguen el rastro de las piezas heridas.
 
 ## Gráficos
 

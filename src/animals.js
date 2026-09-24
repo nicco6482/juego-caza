@@ -65,6 +65,21 @@ export const SPECIES = {
     walk: 1.5, run: 12, hearing: 60, sight: 90, smell: 180,
     col: { body: '#7a6c5a', dark: '#28221c', light: '#e2d8c6', rump: '#7a6c5a', nose: '#161210' },
   },
+  braco: {
+    name: 'Braco húngaro', legal: false, dog: true, scale: 0.62, build: 'dog', walk: 1.6, run: 9,
+    hearing: 0, sight: 0, smell: 0,
+    col: { body: '#b8662e', dark: '#8a4a22', light: '#c77d44', rump: '#b8662e', nose: '#6a3a26' },
+  },
+  teckel: {
+    name: 'Teckel', legal: false, dog: true, scale: 0.42, build: 'dachs', walk: 1.3, run: 5.5,
+    hearing: 0, sight: 0, smell: 0,
+    col: { body: '#8e3c1b', dark: '#4a1f0f', light: '#a04c26', rump: '#8e3c1b', nose: '#1a1210' },
+  },
+  podenco: {
+    name: 'Podenco', legal: false, dog: true, scale: 0.62, build: 'podenco', walk: 1.7, run: 11,
+    hearing: 0, sight: 0, smell: 0,
+    col: { body: '#c27a3a', dark: '#8a5024', light: '#f2ece0', rump: '#c27a3a', nose: '#8a5a44' },
+  },
   liebre: {
     name: 'Liebre', fem: true, legal: true, points: 130, scale: 0.62, build: 'hare',
     walk: 1.2, run: 13, hearing: 45, sight: 60, smell: 60,
@@ -86,6 +101,9 @@ const BUILDS = {
   fox: { L: 0.55, bl: 1.45, bh: 0.46, bw: 0.38, neckLen: 0.34, neckR: 0.11, hs: 0.18, snout: 0.3, rest: 0.75, graze: 1.9 },
   sheep: { L: 0.7, bl: 1.25, bh: 0.56, bw: 0.46, neckLen: 0.34, neckR: 0.14, hs: 0.17, snout: 0.2, rest: 0.95, graze: 2.0 },
   wolf: { L: 0.58, bl: 1.35, bh: 0.52, bw: 0.42, neckLen: 0.3, neckR: 0.16, hs: 0.23, snout: 0.28, rest: 0.62, graze: 1.9 },
+  dog: { L: 0.62, bl: 1.0, bh: 0.42, bw: 0.3, neckLen: 0.28, neckR: 0.1, hs: 0.16, snout: 0.21, rest: 0.72, graze: 1.7 },
+  dachs: { L: 0.3, bl: 1.08, bh: 0.4, bw: 0.3, neckLen: 0.24, neckR: 0.1, hs: 0.17, snout: 0.24, rest: 0.78, graze: 1.7 },
+  podenco: { L: 0.7, bl: 0.95, bh: 0.38, bw: 0.26, neckLen: 0.32, neckR: 0.085, hs: 0.14, snout: 0.23, rest: 0.55, graze: 1.7 },
   hare: { L: 0.36, bl: 0.95, bh: 0.4, bw: 0.3, neckLen: 0.12, neckR: 0.11, hs: 0.16, snout: 0.13, rest: 1.05, graze: 1.75 },
 };
 
@@ -140,6 +158,12 @@ const TORSO = {
     [0.25, 0.04, 0.23, 0.3], [0.42, 0.06, 0.19, 0.28], [0.53, 0.12, 0.13, 0.19], [0.57, 0.16, 0.02, 0.02]],
   wolf: [[-0.68, 0.04, 0.02, 0.02], [-0.64, 0.04, 0.12, 0.14], [-0.52, 0.02, 0.18, 0.21], [-0.28, -0.01, 0.18, 0.22], [0.0, 0.0, 0.19, 0.24],
     [0.28, 0.04, 0.2, 0.27], [0.48, 0.07, 0.17, 0.25], [0.6, 0.13, 0.11, 0.16], [0.64, 0.16, 0.02, 0.02]],
+  dog: [[-0.52, 0.03, 0.02, 0.02], [-0.49, 0.03, 0.1, 0.12], [-0.38, 0.02, 0.14, 0.17], [-0.18, 0.0, 0.14, 0.16], [0.05, 0.01, 0.15, 0.19],
+    [0.25, 0.03, 0.15, 0.21], [0.4, 0.06, 0.13, 0.19], [0.48, 0.11, 0.08, 0.12], [0.51, 0.13, 0.02, 0.02]],
+  dachs: [[-0.56, 0.03, 0.02, 0.02], [-0.53, 0.03, 0.1, 0.12], [-0.4, 0.02, 0.14, 0.16], [-0.15, 0.0, 0.14, 0.16], [0.1, -0.01, 0.15, 0.2],
+    [0.3, 0.0, 0.15, 0.22], [0.45, 0.04, 0.13, 0.19], [0.53, 0.1, 0.08, 0.12], [0.56, 0.12, 0.02, 0.02]],
+  podenco: [[-0.5, 0.03, 0.02, 0.02], [-0.47, 0.03, 0.09, 0.11], [-0.35, 0.04, 0.12, 0.14], [-0.15, 0.05, 0.1, 0.11], [0.05, 0.0, 0.125, 0.19],
+    [0.25, -0.01, 0.13, 0.22], [0.4, 0.05, 0.11, 0.19], [0.47, 0.11, 0.07, 0.11], [0.5, 0.13, 0.02, 0.02]],
   hare: [[-0.48, 0.03, 0.02, 0.02], [-0.45, 0.04, 0.12, 0.14], [-0.3, 0.05, 0.16, 0.2], [-0.1, 0.04, 0.15, 0.19], [0.1, 0.03, 0.13, 0.17],
     [0.28, 0.06, 0.1, 0.14], [0.36, 0.1, 0.02, 0.02]],
 };
@@ -192,6 +216,7 @@ function buildGeometry(key, cls = 1) {
       col = mixc(col, C.dark, sm(0.3, 0.5, v.z) * sm(0.2, -0.3, s) * 0.8);
     }
     if (build === 'sheep') col = mixc(col, C.rump, sm(-0.5, -0.62, v.z) * sm(-0.6, 0.2, s));
+    if (build === 'podenco') col = mixc(col, C.light, sm(-0.2, -0.6, s) * sm(-0.1, 0.25, v.z) + sm(0.3, 0.45, v.z) * sm(0.1, -0.5, s));
     return col;
   };
   const torso = [loft(torsoSecs, [0, 1, 0], 28, torsoCol, 2.25)];
@@ -211,6 +236,14 @@ function buildGeometry(key, cls = 1) {
     torso.push(Bt([0, by + 0.1, -0.66], [0, by - 0.2, -0.74], 0.025, 0.015, sp.col.dark, 5));
   } else if (build === 'sheep') {
     torso.push(P(sphere, sp.col.dark, [0, by + 0.06, -0.64], [0.4, 0, 0], [0.04, 0.07, 0.04]));
+  } else if (sp.dog) {
+    const tails = {
+      dog: [[0.04, -0.5, 0.035, 0.035], [0.08, -0.65, 0.03, 0.03], [0.1, -0.78, 0.018, 0.018], [0.1, -0.82, 0.005, 0.005]],
+      dachs: [[0.04, -0.54, 0.03, 0.03], [0.1, -0.72, 0.022, 0.022], [0.18, -0.88, 0.012, 0.012], [0.2, -0.92, 0.004, 0.004]],
+      podenco: [[0.04, -0.48, 0.025, 0.025], [0.02, -0.68, 0.02, 0.02], [0.12, -0.86, 0.014, 0.014], [0.3, -0.92, 0.004, 0.004]],
+    }[build];
+    torso.push(loft(subdivide(tails.map(([dy, z, w, h]) => ({ p: [0, by + dy, z], w, h })), 3), [0, 1, 0], 10,
+      (t) => (build === 'podenco' ? mixc(C.body, C.light, sm(0.7, 0.9, t)) : C.body), 2));
   } else if (build === 'hare') {
     torso.push(P(sphere, sp.col.light, [0, by + 0.05, -0.49], [0, 0, 0], [0.06, 0.06, 0.05]));
   } else if (build === 'wolf') {
@@ -245,7 +278,8 @@ function buildGeometry(key, cls = 1) {
     g.applyMatrix4(hm);
     return g;
   };
-  const mw = { deer: 0.8, boar: 0.95, fox: 0.6, sheep: 0.85, wolf: 0.7, hare: 0.8 }[build], mh = { deer: 0.85, boar: 0.85, fox: 0.6, sheep: 0.9, wolf: 0.68, hare: 0.85 }[build];
+  const mw = { deer: 0.8, boar: 0.95, fox: 0.6, sheep: 0.85, wolf: 0.7, hare: 0.8, dog: 0.78, dachs: 0.7, podenco: 0.6 }[build];
+  const mh = { deer: 0.85, boar: 0.85, fox: 0.6, sheep: 0.9, wolf: 0.68, hare: 0.85, dog: 0.8, dachs: 0.72, podenco: 0.6 }[build];
   const snoutEnd = hs * 0.3 + snout;
   const headSecs = subdivide([
     [-hs * 0.55, hs * 0.25, 0.01, 0.01], [-hs * 0.45, hs * 0.28, hs * 0.5, hs * 0.55], [-hs * 0.12, hs * 0.32, hs * 0.64, hs * 0.64],
@@ -259,6 +293,7 @@ function buildGeometry(key, cls = 1) {
     if (build === 'fox') col = mixc(col, C.light, sm(0.0, hs * 0.3, v.z) * sm(0.0, -0.5, s));
     if (build === 'boar') col = mixc(col, C.dark, 0.3);
     if (build === 'wolf') col = mixc(col, C.light, sm(0.0, hs * 0.3, v.z) * sm(0.0, -0.6, s) * 0.8);
+    if (build === 'podenco') col = mixc(col, C.light, sm(hs * 0.3, hs * 0.6, v.z) * sm(0.2, -0.4, s) + (1 - sm(0.08, 0.2, Math.abs(c))) * sm(0.3, 0.7, s) * 0.8);
     if (key === 'muflon') col = mixc(col, C.light, sm(hs * 0.25, hs * 0.5, v.z));
     if (key === 'cabra') col = mixc(col, C.dark, sm(hs * 0.1, hs * 0.4, v.z) * 0.6);
     if (build === 'sheep' && key !== 'muflon') return mixc(col, C.nose, sm(hs * 0.3 + snout * 0.8, snoutEnd, v.z) * 0.6);
@@ -268,9 +303,15 @@ function buildGeometry(key, cls = 1) {
   for (const sx of [-1, 1]) {
     neck.push(H(P(sphere, '#0b0908', [sx * hs * 0.5, hs * 0.44, hs * 0.16], [0, 0, 0], [hs * 0.13, hs * 0.13, hs * 0.13])));
   }
-  const earLen = { fox: hs * 1.15, wolf: hs * 0.8, boar: hs * 0.75, sheep: hs * 0.85, hare: hs * 2.6 }[build] ?? hs * 1.3;
+  const earLen = { fox: hs * 1.15, wolf: hs * 0.8, boar: hs * 0.75, sheep: hs * 0.85, hare: hs * 2.6, dog: hs * 1.0, dachs: hs * 1.1, podenco: hs * 1.5 }[build] ?? hs * 1.3;
   for (const sx of [-1, 1]) {
-    if (build === 'hare') {
+    if (build === 'dog' || build === 'dachs') {
+      // Orejas caídas junto a la cara.
+      neck.push(H(P(sphere, build === 'dachs' ? sp.col.dark : sp.col.body, [sx * hs * 0.62, hs * 0.2, -hs * 0.12], [0.15, 0, sx * 0.18], [hs * 0.09, earLen * 0.55, hs * 0.34])));
+    } else if (build === 'podenco') {
+      // Orejas grandes, tiesas y abiertas.
+      neck.push(H(P(new THREE.ConeGeometry(hs * 0.38, earLen, 3), sp.col.body, [sx * hs * 0.42, hs * 0.75 + earLen * 0.42, -hs * 0.2], [-0.15, 0, -sx * 0.3], [1, 1, 0.35])));
+    } else if (build === 'hare') {
       const rot = [-0.5, 0, -sx * 0.25];
       const pos = [sx * hs * 0.3, hs * 0.7 + earLen * 0.45, -hs * 0.35];
       neck.push(H(P(sphere, sp.col.body, pos, rot, [hs * 0.22, earLen * 0.5, hs * 0.09])));
@@ -398,11 +439,13 @@ function buildGeometry(key, cls = 1) {
 
   // --- Patas (pivote en la cadera) ---
   const k = L / 0.92;
-  const th = { deer: 1, boar: 1.55, fox: 0.85, sheep: 1.15, wolf: 1.3, hare: 1.1 }[build];
+  const th = { deer: 1, boar: 1.55, fox: 0.85, sheep: 1.15, wolf: 1.3, hare: 1.1, dog: 0.95, dachs: 1.5, podenco: 0.72 }[build];
   const legCol = (t) => {
     let col = mixc(C.body, C.dark, sm(0.45, 0.8, t) * (build === 'fox' ? 0.9 : 0.35));
     if (key === 'muflon') col = mixc(col, C.light, sm(0.4, 0.6, t));
     if (sp.spots) col = mixc(col, C.light, sm(0.15, 0.5, t) * 0.45);
+    if (sp.dog) col = mixc(col, C.body, 0.6);
+    if (build === 'podenco') col = mixc(col, C.light, sm(0.35, 0.6, t));
     if (key === 'cabra' || build === 'wolf') col = mixc(col, C.dark, sm(0.15, 0.4, t) * sm(0.85, 0.6, t) * 0.7);
     return mixc(col, lin('#1c1712'), sm(0.86, 0.92, t));
   };

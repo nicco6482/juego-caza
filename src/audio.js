@@ -382,6 +382,40 @@ export class Sfx {
     }
   }
 
+  lever() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.click(t + 0.15, 1400, 0.35);
+    this.click(t + 0.3, 2600, 0.3);
+    this.click(t + 0.42, 1800, 0.35);
+  }
+
+  // Ladrido: grave y seco (braco/podenco) o agudo y repetido (teckel latiendo).
+  bark(dist, pan, small = false, excited = false) {
+    if (!this.ctx || dist > 400) return;
+    const ctx = this.ctx, t0 = ctx.currentTime + dist / 343;
+    const vol = Math.min(0.45, 25 / (dist + 12));
+    const dest = this.out(pan, vol, 0.5);
+    const n = excited ? 3 : 1 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < n; i++) {
+      const t = t0 + i * (small ? 0.22 : 0.3);
+      const f = (small ? 620 : 380) * (0.9 + Math.random() * 0.2);
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f * 1.3, t);
+      o.frequency.exponentialRampToValueAtTime(f * 0.7, t + 0.12);
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = f * 2.2;
+      bp.Q.value = 1.2;
+      const g = ctx.createGain();
+      this.env(g, t, 0.008, 1, 0.13);
+      o.connect(bp).connect(g).connect(dest);
+      o.start(t);
+      o.stop(t + 0.2);
+    }
+  }
+
   step(vol) {
     if (!this.ctx) return;
     const ctx = this.ctx, t = ctx.currentTime;

@@ -15,12 +15,12 @@ export function stepBullet(pos, vel, dt, wind) {
 }
 
 // Ángulo de elevación del cañón para que la bala cruce la línea de mira a `dist` metros.
-export function zeroAngle(dist) {
+export function zeroAngle(dist, muzzle = MUZZLE) {
   let lo = 0, hi = 0.03;
   for (let i = 0; i < 40; i++) {
     const a = (lo + hi) / 2;
     let x = 0, y = 0;
-    let vx = Math.cos(a) * MUZZLE, vy = Math.sin(a) * MUZZLE;
+    let vx = Math.cos(a) * muzzle, vy = Math.sin(a) * muzzle;
     const dt = 1 / 2000;
     let px = 0, py = 0;
     while (x < dist) {

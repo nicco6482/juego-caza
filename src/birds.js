@@ -254,19 +254,25 @@ export class Birds {
   }
 
   // Pasa una bandada o una pareja en vuelo cerca del jugador (tiro "de paso").
-  flyover(px, pz) {
-    const key = Math.random() < 0.55 ? 'tortola' : 'zorzal';
+  flyover(px, pz, driven = false) {
+    let key = Math.random() < 0.55 ? 'tortola' : 'zorzal';
+    if (driven) {
+      // Ojeo: te entran perdices, tórtolas, zorzales y, cerca del lago, patos.
+      const nearLake = Math.hypot(px - LAKE.x, pz - LAKE.z) < LAKE.r * 3;
+      const r = Math.random();
+      key = r < 0.34 ? 'perdiz' : r < 0.64 ? 'tortola' : r < 0.84 || !nearLake ? 'zorzal' : 'pato';
+    }
     const sp = BIRDS[key];
     const ang = Math.random() * Math.PI * 2;
-    const off = (Math.random() - 0.5) * 90;
+    const off = driven ? (Math.random() - 0.5) * 50 : (Math.random() - 0.5) * 90;
     const dx = Math.sin(ang), dz = Math.cos(ang);
     const sx = px - dx * 230 + dz * off, sz = pz - dz * 230 - dx * off;
-    const n = key === 'tortola' ? 1 + Math.floor(Math.random() * 3) : 5 + Math.floor(Math.random() * 8);
+    const n = { tortola: 1 + Math.floor(Math.random() * 3), zorzal: 5 + Math.floor(Math.random() * 8), perdiz: 4 + Math.floor(Math.random() * 6), pato: 3 + Math.floor(Math.random() * 4) }[key];
     const flock = { key, birds: [] };
     for (let i = 0; i < n; i++) {
       const b = this.make(key, sx + (Math.random() - 0.5) * 12, sz + (Math.random() - 0.5) * 12, flock);
       b.state = 'pass';
-      b.alt = sp.alt[0] + Math.random() * (sp.alt[1] - sp.alt[0]);
+      b.alt = (driven ? sp.alt[0] * 0.8 + Math.random() * (sp.alt[1] - sp.alt[0]) * 0.6 : sp.alt[0] + Math.random() * (sp.alt[1] - sp.alt[0]));
       b.pos.y = groundAt(b.pos.x, b.pos.z) + b.alt;
       b.target.set(px + dx * 260 + dz * off, 0, pz + dz * 260 - dx * off);
       b.vel.set(dx, 0, dz).multiplyScalar(sp.speed);
@@ -289,6 +295,7 @@ export class Birds {
   }
 
   takeOff(b) {
+    if (b.state !== 'ground' && b.state !== 'swim') return;
     const sp = b.sp;
     const ax = b.pos.x - b.fromX, az = b.pos.z - b.fromZ;
     const l = Math.hypot(ax, az) || 1;
@@ -325,6 +332,8 @@ export class Birds {
   kill(b, dir) {
     if (b.state === 'dead' || b.state === 'gone') return false;
     b.wasFlying = b.state === 'fly' || b.state === 'pass';
+    b.byPlayer = true;
+    b.delay = -1;
     b.state = 'dead';
     b.deadT = 0;
     b.vel.multiplyScalar(0.4).addScaledVector(dir, 2);
@@ -347,13 +356,15 @@ export class Birds {
     return best;
   }
 
-  update(dt, player, playerNoise) {
+  update(dt, player, playerNoise, flushers = [], driven = false) {
+    this.flushers = flushers;
     for (const b of this.list) this.step(b, dt, player, playerNoise);
     this.list = this.list.filter((b) => b.state !== 'gone');
     this.passTimer -= dt;
+    if (driven && this.passTimer > 12) this.passTimer = 4 + Math.random() * 6;
     if (this.passTimer <= 0 && player) {
-      this.passTimer = 22 + Math.random() * 25;
-      this.flyover(player.x, player.z);
+      this.passTimer = driven ? 7 + Math.random() * 6 : 22 + Math.random() * 25;
+      this.flyover(player.x, player.z, driven);
     }
     this.draw();
   }
@@ -365,6 +376,7 @@ export class Birds {
       b.delay -= dt;
       if (b.delay < 0) this.takeOff(b);
     }
+    if (b.state === 'carried') return;
     if (b.state === 'ground' || b.state === 'swim') {
       b.fold += (1 - b.fold) * Math.min(1, dt * 6);
       // Deambula y picotea (o nada despacio).
@@ -389,6 +401,13 @@ export class Birds {
         const dist = Math.hypot(player.x - b.pos.x, player.z - b.pos.z);
         if (dist < sp.flush * (0.45 + 0.55 * Math.min(1, noise + 0.3))) {
           for (const o of b.flock.birds) this.flush(o, player.x, player.z, Math.random() * 0.5);
+        }
+        // Los perros levantan la caza.
+        for (const f of this.flushers || []) {
+          if (Math.hypot(f.x - b.pos.x, f.z - b.pos.z) < 9) {
+            for (const o of b.flock.birds) this.flush(o, f.x, f.z, Math.random() * 0.4);
+            break;
+          }
         }
       }
       return;
@@ -442,7 +461,7 @@ export class Birds {
     if (b.state === 'dead') {
       b.deadT += dt;
       const floor = this.floor(b);
-      if (b.pos.y > floor + 0.01) {
+      if (b.pos.y > floor + 0.01 || b.vel.y > 0) {
         b.vel.y -= 9.8 * dt;
         b.vel.multiplyScalar(1 - dt * 0.3);
         b.pos.addScaledVector(b.vel, dt);

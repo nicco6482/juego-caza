@@ -488,3 +488,28 @@ button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-v
   .screen { padding-left: 16px; background: rgba(10, 9, 7, 0.7); }
   .menu-card.wide { padding: 20px; }
 }
+
+#weapons {
+  position: absolute;
+  left: 50%;
+  bottom: 70px;
+  transform: translate(-50%, 10px);
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.25s, transform 0.25s;
+}
+#weapons.show { opacity: 1; transform: translate(-50%, 0); }
+#weapons div {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+#weapons div b { margin-right: 6px; color: var(--ink); }
+#weapons div.on { color: #1c140a; background: var(--accent); border-color: transparent; }
+#weapons div.on b { color: #1c140a; }
+@media (max-width: 720px) { #weapons div { font-size: 10px; padding: 4px 6px; } }

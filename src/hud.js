@@ -62,12 +62,11 @@ export class Hud {
     this.el.windSpeed.textContent = `${speed.toFixed(1)} m/s`;
   }
 
-  setAmmo(mag, reserve, state, size = 5, weapon = 'Rifle') {
+  setAmmo(mag, reserve, state, size = 5, weapon = 'Rifle', shell = false) {
     const key = `${mag}|${reserve}|${state}|${size}|${weapon}`;
     if (key === this._ammoKey) return;
     this._ammoKey = key;
     let html = '';
-    const shell = weapon !== 'Rifle';
     for (let i = 0; i < size; i++) html += `<i class="${i < mag ? 'full' : ''}${shell ? ' shell' : ''}"></i>`;
     this.el.mag.innerHTML = html;
     this.el.reserve.textContent = reserve;
@@ -84,6 +83,15 @@ export class Hud {
     this.el.breath.style.width = `${v * 100}%`;
     this.el.breathBox.classList.toggle('holding', holding);
     this.el.breathBox.classList.toggle('gasp', gasp);
+  }
+
+  // Barra de armas: aparece un momento al cambiar.
+  weaponBar(names, current) {
+    const el = document.getElementById('weapons');
+    el.innerHTML = names.map((n, i) => `<div class="${i === current ? 'on' : ''}"><b>${i + 1}</b>${n}</div>`).join('');
+    el.classList.add('show');
+    clearTimeout(this._wb);
+    this._wb = setTimeout(() => el.classList.remove('show'), 2200);
   }
 
   banner(title, sub, kind = 'good') {

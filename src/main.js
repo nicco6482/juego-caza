@@ -5,7 +5,8 @@ import { Fauna, ZONES } from './animals.js';
 import { Effects } from './effects.js';
 import { Sfx } from './audio.js';
 import { MUZZLE, stepBullet, zeroAngle } from './ballistics.js';
-import { buildRifle, buildShotgun } from './rifle.js';
+import { buildRifle, buildShotgun, buildOverUnder, buildSemiAuto, buildLever } from './rifle.js';
+import { DogPack } from './dogs.js';
 import { Birds } from './birds.js';
 import { Hud } from './hud.js';
 import { createPost } from './post.js';
@@ -13,13 +14,18 @@ import { loadModels } from './models.js';
 
 // ---------- Ajustes ----------
 const HUNT_TIME = 600;
+// kind: 'rifle' (una bala) o 'shotgun' (perdigones). scope: con visor. spread: apertura del plomeo.
 const WEAPONS = {
-  rifle: { name: 'Rifle', mag: 5, reserve: 20, cycle: 1.15, reload: 2.6 },
-  escopeta: { name: 'Escopeta', mag: 2, reserve: 40, cycle: 0.28, reload: 1.9 },
+  rifle: { name: 'Rifle de cerrojo', short: 'Cerrojo .308', kind: 'rifle', scope: true, action: 'bolt', mag: 5, reserve: 20, cycle: 1.15, reload: 2.6, muzzle: 830 },
+  palanca: { name: 'Rifle de palanca', short: 'Palanca .30-30', kind: 'rifle', scope: false, action: 'lever', mag: 6, reserve: 24, cycle: 0.55, reload: 3.2, muzzle: 720, aimFov: 38 },
+  escopeta: { name: 'Escopeta paralela', short: 'Paralela', kind: 'shotgun', mag: 2, reserve: 40, cycle: 0.28, reload: 1.9, spread: 0.011, pellets: 28 },
+  superpuesta: { name: 'Escopeta superpuesta', short: 'Superpuesta', kind: 'shotgun', mag: 2, reserve: 40, cycle: 0.3, reload: 1.9, spread: 0.0085, pellets: 30 },
+  semiauto: { name: 'Escopeta semiautomática', short: 'Semiautomática', kind: 'shotgun', mag: 3, reserve: 45, cycle: 0.22, reload: 2.8, spread: 0.013, pellets: 26, action: 'semi' },
 };
+const WEAPON_ORDER = ['rifle', 'palanca', 'escopeta', 'superpuesta', 'semiauto'];
+const isShotgun = () => WEAPONS[game.weapon].kind === 'shotgun';
 const MAG_SIZE = 5;
 const RESERVE = 20;
-const PELLETS = 28;
 const magSize = () => WEAPONS[game.weapon].mag;
 const ZEROS = [100, 150, 200, 250, 300, 400];
 const ZOOMS = [3, 6, 10, 16, 24];
@@ -83,10 +89,11 @@ scene.add(camera);
 
 const hud = new Hud();
 const sfx = new Sfx();
-let world, fauna, effects, rifle, post, water, birds;
+let world, fauna, effects, rifle, post, water, birds, dogs;
 const views = {};
 
-const zeroAngles = ZEROS.map(zeroAngle);
+const zeroAngles = ZEROS.map((d) => zeroAngle(d));
+const leverZero = zeroAngle(100, WEAPONS.palanca.muzzle);
 
 // ---------- Estado ----------
 const game = {
@@ -211,7 +218,10 @@ function boot() {
     },
   });
   views.rifle = buildRifle();
+  views.palanca = buildLever();
   views.escopeta = buildShotgun();
+  views.superpuesta = buildOverUnder();
+  views.semiauto = buildSemiAuto();
   for (const v of Object.values(views)) {
     camera.add(v.group);
     v.group.position.set(0.19, -0.2, -0.42);
@@ -219,6 +229,9 @@ function boot() {
   }
   rifle = views.rifle;
   birds = new Birds(scene, {
+    onLand: (b) => {
+      if (b.byPlayer && game.state === 'playing') dogs.retrieve(b);
+    },
     onFlush: (b) => {
       if (game.state !== 'playing') return;
       const d = b.pos.distanceTo(player.pos), pan = Math.sin(relativeBearing(b.pos));
@@ -227,6 +240,25 @@ function boot() {
     },
   });
   makeBulletMesh();
+
+  dogs = window.__dogs = new DogPack(scene, {
+    onPickup: (d, b) => hud.feed(`${d.sp.name} cobra ${b.sp.fem ? 'la' : 'el'} ${b.sp.name.toLowerCase()}`),
+    onRetrieved: (d, b) => {
+      game.score += 10;
+      hud.setScore(game.score);
+      hud.feed(`${d.sp.name}: ${b.sp.name.toLowerCase()} cobrad${b.sp.fem ? 'a' : 'o'} · +10`, 'good');
+      sfx.bark(1, 0, false);
+    },
+    onBark: (d, found) => {
+      if (game.state !== 'playing') return;
+      sfx.bark(d.pos.distanceTo(player.pos), Math.sin(relativeBearing(d.pos)), true, found);
+    },
+    onTracked: (a) => {
+      game.score += 25;
+      hud.setScore(game.score);
+      hud.feed(`Los teckels han encontrado ${a.sp.fem ? 'la' : 'el'} ${a.sp.name.toLowerCase()} · +25`, 'good');
+    },
+  });
 
   // Modelos 3D opcionales (si no hay, se usan los generados por código).
   loadModels().finally(() => {
@@ -266,10 +298,11 @@ function newHunt() {
   Object.assign(game, {
     time: HUNT_TIME, score: 0, mag: MAG_SIZE, reserve: RESERVE, shots: 0, hits: 0, log: [], longest: 0,
     boltT: 0, reloadT: 0, timeScale: 1, ended: false, weapon: 'rifle', switchT: 0,
-    stash: { escopeta: { mag: WEAPONS.escopeta.mag, reserve: WEAPONS.escopeta.reserve } },
+    stash: {},
   });
-  views.escopeta.group.visible = false;
+  for (const v of Object.values(views)) v.group.visible = false;
   rifle = views.rifle;
+  dogs.reset(player.pos.x, player.pos.z);
   wind.baseAngle = Math.random() * Math.PI * 2;
   wind.baseSpeed = 1.5 + Math.random() * 4.5;
   updateWind(0);
@@ -280,7 +313,8 @@ function newHunt() {
   hud.feed('Temporada abierta: ciervo, gamo, corzo, jabalí, muflón, cabra montés, zorro y liebre.');
   hud.feed('Protegidos: la cierva y el lobo ibérico.', 'bad');
   hud.feed('Es época de berrea: escucha a los ciervos para saber dónde están.');
-  hud.feed('Caza menor: perdiz, tórtola, zorzal, agachadiza y ánade. Pulsa 2 para la escopeta.');
+  hud.feed('Caza menor: perdiz, tórtola, zorzal, agachadiza y ánade. Con escopeta (3, 4 o 5) te entran al vuelo.');
+  hud.feed('Te acompañan 2 bracos, 3 podencos y 2 teckels.');
   hud.tip('Clic derecho o F: visor · B: prismáticos · Mira el viento antes de acercarte', 6);
 }
 
@@ -398,13 +432,14 @@ addEventListener('keydown', (e) => {
       reload();
       break;
     case 'Digit1':
-      switchWeapon('rifle');
-      break;
     case 'Digit2':
-      switchWeapon('escopeta');
+    case 'Digit3':
+    case 'Digit4':
+    case 'Digit5':
+      switchWeapon(WEAPON_ORDER[+e.code.slice(5) - 1]);
       break;
     case 'KeyQ':
-      switchWeapon(game.weapon === 'rifle' ? 'escopeta' : 'rifle');
+      switchWeapon(game.lastWeapon || 'escopeta');
       break;
     case 'Enter':
     case 'NumpadEnter':
@@ -491,7 +526,13 @@ addEventListener('wheel', (e) => {
     }
     return;
   }
-  if (!isScoped()) return;
+  if (!isScoped()) {
+    if (player.aim < 0.3) {
+      const i = WEAPON_ORDER.indexOf(game.weapon);
+      switchWeapon(WEAPON_ORDER[(i - step + WEAPON_ORDER.length) % WEAPON_ORDER.length]);
+    }
+    return;
+  }
   const n = clamp(game.zoomIdx + step, 0, ZOOMS.length - 1);
   if (n !== game.zoomIdx) {
     game.zoomIdx = n;
@@ -527,6 +568,14 @@ function changeZero(d) {
   }
 }
 
+function totalAmmo() {
+  return WEAPON_ORDER.reduce((sum, k) => {
+    if (k === game.weapon) return sum + game.mag + game.reserve;
+    const st = game.stash[k];
+    return sum + (st ? st.mag + st.reserve : WEAPONS[k].mag + WEAPONS[k].reserve);
+  }, 0);
+}
+
 function switchWeapon(w) {
   if (w === game.weapon || game.reloadT > 0 || bulletCam.active) return;
   game.stash[game.weapon] = { mag: game.mag, reserve: game.reserve };
@@ -534,6 +583,7 @@ function switchWeapon(w) {
   game.mag = st.mag;
   game.reserve = st.reserve;
   views[game.weapon].group.visible = false;
+  game.lastWeapon = game.weapon;
   game.weapon = w;
   rifle = views[w];
   game.switchT = 0.6;
@@ -541,7 +591,8 @@ function switchWeapon(w) {
   player.aiming = false;
   player.aimToggle = false;
   sfx.step(0.2);
-  hud.tip(w === 'rifle' ? 'Rifle: caza mayor' : 'Escopeta: aves en vuelo, hasta unos 40 m', 2);
+  hud.weaponBar(WEAPON_ORDER.map((k) => WEAPONS[k].short), WEAPON_ORDER.indexOf(w));
+  hud.tip(WEAPONS[w].kind === 'shotgun' ? `${WEAPONS[w].name}: aves a vuelo, hasta unos 40 m` : `${WEAPONS[w].name}: caza mayor`, 2);
   refreshAmmo();
 }
 
@@ -556,13 +607,14 @@ function reload() {
 function refreshAmmo() {
   let state = '';
   if (game.reloadT > 0) state = 'Recargando…';
-  else if (game.boltT > 0 && game.weapon === 'rifle') state = 'Cerrojo';
+  else if (game.boltT > 0 && WEAPONS[game.weapon].action === 'bolt') state = 'Cerrojo';
+  else if (game.boltT > 0 && WEAPONS[game.weapon].action === 'lever') state = 'Palanca';
   else if (game.mag === 0) state = game.reserve > 0 ? 'R · Recargar' : 'Sin munición';
-  hud.setAmmo(game.mag, game.reserve, state, magSize(), WEAPONS[game.weapon].name);
+  hud.setAmmo(game.mag, game.reserve, state, magSize(), WEAPONS[game.weapon].name, isShotgun());
 }
 
 function isScoped() {
-  return player.aim > 0.92 && !player.binoc && game.weapon === 'rifle';
+  return player.aim > 0.92 && !player.binoc && WEAPONS[game.weapon].scope === true;
 }
 
 // ---------- Disparo ----------
@@ -573,10 +625,11 @@ const _up = new THREE.Vector3(0, 1, 0);
 function fire() {
   if (player.binoc) return;
   if (game.reloadT > 0 || game.boltT > 0 || game.switchT > 0) return;
-  if (game.weapon === 'escopeta') {
+  if (isShotgun()) {
     fireShotgun();
     return;
   }
+  const W = WEAPONS[game.weapon];
   if (game.mag <= 0) {
     sfx.dry();
     hud.tip(game.reserve > 0 ? 'Cargador vacío · pulsa R' : 'Sin munición', 2);
@@ -584,15 +637,15 @@ function fire() {
   }
   game.mag--;
   game.shots++;
-  game.boltT = 1.15;
+  game.boltT = W.cycle;
   game.shotId++;
   refreshAmmo();
 
   camera.updateMatrixWorld();
   camera.getWorldDirection(_dir);
   _right.crossVectors(_dir, _up).normalize();
-  _dir.applyAxisAngle(_right, zeroAngles[game.zeroIdx]);
-  if (!isScoped()) {
+  _dir.applyAxisAngle(_right, W.scope ? zeroAngles[game.zeroIdx] : leverZero);
+  if (!isScoped() && !(W.aimFov && player.aim > 0.8)) {
     // Sin apuntar se dispara "a la cadera": nada preciso.
     const spread = 0.035 * (1 - player.aim * 0.7);
     _dir.x += (Math.random() - 0.5) * spread;
@@ -601,12 +654,13 @@ function fire() {
     _dir.normalize();
   }
   const start = camera.position.clone().addScaledVector(_dir, 0.3);
-  const b = { pos: start.clone(), prev: start.clone(), vel: _dir.clone().multiplyScalar(MUZZLE), t: 0, origin: start.clone(), alive: true, shot: game.shotId };
+  const b = { pos: start.clone(), prev: start.clone(), vel: _dir.clone().multiplyScalar(W.muzzle || MUZZLE), t: 0, origin: start.clone(), alive: true, shot: game.shotId };
   bullets.push(b);
   birds.onGunshot(player.pos.x, player.pos.z);
 
   sfx.shot();
-  sfx.bolt();
+  if (W.action === 'bolt') sfx.bolt();
+  else sfx.lever();
   fauna.onGunshot(player.pos.x, player.pos.z);
   player.recoil += isScoped() ? 0.055 : 0.04;
   hud.muzzleFlash();
@@ -633,7 +687,8 @@ function fireShotgun() {
   game.mag--;
   game.shots++;
   game.shotId++;
-  game.boltT = WEAPONS.escopeta.cycle;
+  const W = WEAPONS[game.weapon];
+  game.boltT = W.cycle;
   refreshAmmo();
   camera.updateMatrixWorld();
   camera.getWorldDirection(_dir);
@@ -647,15 +702,16 @@ function fireShotgun() {
   const right = new THREE.Vector3().crossVectors(base, _up).normalize();
   const upv = new THREE.Vector3().crossVectors(right, base).normalize();
   const start = camera.position.clone().addScaledVector(base, 0.3);
-  for (let i = 0; i < PELLETS; i++) {
+  for (let i = 0; i < W.pellets; i++) {
     // Reparto gaussiano: la mayoría cerca del centro.
-    const r = Math.sqrt(-2 * Math.log(Math.max(1e-6, Math.random()))) * 0.011;
+    const r = Math.sqrt(-2 * Math.log(Math.max(1e-6, Math.random()))) * W.spread;
     const a = Math.random() * Math.PI * 2;
     const d = base.clone().addScaledVector(right, Math.cos(a) * r).addScaledVector(upv, Math.sin(a) * r).normalize();
     bullets.push({ pos: start.clone(), prev: start.clone(), vel: d.multiplyScalar(390 + Math.random() * 20), t: 0, origin: start.clone(), alive: true, pellet: true, shot: game.shotId });
   }
   shotHits.set(game.shotId, { counted: false, animals: new Set() });
   sfx.shot(true);
+  if (W.action === 'semi') sfx.click(sfx.ctx ? sfx.ctx.currentTime + 0.08 : 0, 2600, 0.3);
   fauna.onGunshot(player.pos.x, player.pos.z);
   birds.onGunshot(player.pos.x, player.pos.z);
   player.recoil += 0.07;
@@ -818,6 +874,7 @@ function onAnimalHit(animal, zone, dist, res, shot) {
   else game.hits++;
   hud.hitmark(res === 'kill');
   if (res === 'wound') {
+    dogs.track(animal);
     animal.woundDist = dist;
     hud.banner(sp.fem ? 'HERIDA' : 'HERIDO', 'Sigue el rastro de sangre antes de que se pierda', 'warn');
     hud.feed(`${sp.name} ${sp.fem ? 'herida' : 'herido'} a ${Math.round(dist)} m`, 'warn');
@@ -1059,7 +1116,7 @@ function updateCamera(dt) {
   let fov;
   if (scoped) fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(BASE_FOV / 2)) / ZOOMS[game.zoomIdx]));
   else if (binoc) fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(BASE_FOV / 2)) / BINOC_ZOOMS[game.binocIdx]));
-  else fov = BASE_FOV - player.aim * 18;
+  else fov = BASE_FOV - player.aim * (BASE_FOV - (WEAPONS[game.weapon].aimFov || BASE_FOV - 18));
   if (Math.abs(camera.fov - fov) > 1e-3) {
     camera.fov = fov;
     camera.updateProjectionMatrix();
@@ -1069,7 +1126,8 @@ function updateCamera(dt) {
   const r = rifle.group;
   r.visible = !opticOn && !binoc;
   const a = player.aim;
-  const shotgun = game.weapon === 'escopeta';
+  const W = WEAPONS[game.weapon];
+  const shotgun = W.kind === 'shotgun' || W.action === 'lever';
   let rx = 0.19 * (1 - a), ry = -0.2 + a * (shotgun ? 0.152 : 0.115), rz = -0.42 + a * (shotgun ? 0.02 : 0.12);
   let rotZ = 0, rotX = 0;
   if (game.switchT > 0) {
@@ -1078,19 +1136,26 @@ function updateCamera(dt) {
     ry -= k * 0.25;
     rotX -= k * 0.6;
   }
-  if (game.boltT > 0 && !shotgun) {
+  if (W.action === 'lever') {
+    // Palanca: abajo y arriba entre disparo y disparo.
+    const k = game.boltT > 0 ? Math.sin(clamp(1 - game.boltT / W.cycle, 0, 1) * Math.PI) : 0;
+    rifle.bolt.rotation.x = k * 0.9;
+    rotX += k * 0.08;
+  } else if (W.action === 'semi') {
+    rifle.bolt.position.z = game.boltT > 0 ? Math.sin(clamp(1 - game.boltT / W.cycle, 0, 1) * Math.PI) * 0.05 : 0;
+  } else if (game.boltT > 0 && W.action === 'bolt') {
     const p = 1 - game.boltT / 1.15;
     const k = Math.sin(clamp(p * 1.4, 0, 1) * Math.PI);
     rotZ = k * 0.35;
     ry -= k * 0.03;
     rifle.bolt.rotation.z = k * 1.2;
     rifle.bolt.position.z = 0.06 + Math.sin(clamp((p - 0.15) * 1.8, 0, 1) * Math.PI) * 0.08;
-  } else {
+  } else if (W.action === 'bolt') {
     rifle.bolt.rotation.z = 0;
     rifle.bolt.position.z = 0.06;
   }
   if (game.reloadT > 0) {
-    const k = Math.sin(clamp(1 - game.reloadT / 2.6, 0, 1) * Math.PI);
+    const k = Math.sin(clamp(1 - game.reloadT / W.reload, 0, 1) * Math.PI);
     ry -= k * 0.12;
     rotX = k * 0.5;
     rotZ = k * 0.4;
@@ -1223,7 +1288,8 @@ function frame(now) {
       visibility: STANCE[player.stance].vis * (player.moving ? 1 : 0.35) * (forestAt(player.pos.x, player.pos.z) > 0.06 ? 0.7 : 1),
       wind,
     }, camera.position);
-    birds.update(simDt, player.pos, player.moving ? (player.sprinting ? 1.8 : STANCE[player.stance].noise) : 0);
+    dogs.update(simDt, player, player.yaw, isShotgun());
+    birds.update(simDt, player.pos, player.moving ? (player.sprinting ? 1.8 : STANCE[player.stance].noise) : 0, dogs.flushers(), isShotgun());
 
     // HUD
     hud.setTime(game.time);
@@ -1253,7 +1319,7 @@ function frame(now) {
     }
 
     if (game.time <= 0) endHunt('Se ha hecho de noche. Fin de la cacería.');
-    else if (game.mag === 0 && game.reserve === 0 && Object.values(game.stash).every((a) => a.mag + a.reserve === 0 || a === game.stash[game.weapon]) && bullets.length === 0 && game.boltT <= 0 && !bulletCam.active) {
+    else if (totalAmmo() === 0 && bullets.length === 0 && game.boltT <= 0 && !bulletCam.active) {
       game.outT = (game.outT || 0) + realDt;
       if (game.outT > 2.5) endHunt('Te has quedado sin munición.');
     } else game.outT = 0;
@@ -1270,6 +1336,7 @@ function frame(now) {
     rifle.group.visible = false;
     fauna.update(simDt, { player: new THREE.Vector3(9999, 0, 9999), noise: 0, visibility: 0, wind }, camera.position);
     birds.update(simDt, null, 0);
+    dogs.setVisible(false);
   }
 
   effects.update(simDt);
@@ -1335,4 +1402,5 @@ requestAnimationFrame(() => setTimeout(() => {
 }, 30));
 
 // Acceso para depuración desde la consola.
+window.__dogs = null;
 window.__sierra = { game, player, get fauna() { return fauna; }, get birds() { return birds; }, camera, startHunt, endHunt, fire, predict, wind };
