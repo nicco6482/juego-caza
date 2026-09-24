@@ -65,6 +65,10 @@ export function createPost(renderer, scene, camera, quality) {
     setSize(w, h) {
       composer.setSize(w, h);
     },
+    setPixelRatio(pr) {
+      composer.setPixelRatio(pr);
+      composer.setSize(innerWidth, innerHeight);
+    },
     set vignette(v) {
       grade.uniforms.uVignette.value = v;
     },

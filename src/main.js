@@ -39,16 +39,17 @@ const store = {
 
 const settings = {
   sens: store.get('sierra.sens', 1),
-  quality: store.get('sierra.quality', 'alta'),
+  quality: store.get('sierra.quality', 'media'),
+  showFps: store.get('sierra.fps', false),
   bulletCam: store.get('sierra.bulletcam', true),
 };
 const QUALITY = {
   alta: {
-    shadows: true, shadowSize: 4096, grass: 30000, grassRadius: 68, grassCell: 0.95, trees: 1, texSize: 512, foliageSize: 1024, waterReflect: 0.6, waterSeg: 220,
+    shadows: true, shadowSize: 2048, grass: 30000, grassRadius: 68, grassCell: 0.95, trees: 1, texSize: 512, foliageSize: 1024, waterReflect: 0.5, waterSeg: 220,
     bloom: true, msaa: 4, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
   },
   media: {
-    shadows: true, shadowSize: 2048, grass: 14000, grassRadius: 55, grassCell: 1.15, trees: 0.8, texSize: 512, foliageSize: 512, waterReflect: 0.4, waterSeg: 160,
+    shadows: true, shadowSize: 2048, grass: 14000, grassRadius: 55, grassCell: 1.15, trees: 0.8, texSize: 512, foliageSize: 512, waterReflect: 0.33, waterSeg: 160,
     bloom: true, msaa: 2, pixelRatio: 1,
   },
   baja: {
@@ -56,7 +57,7 @@ const QUALITY = {
     bloom: false, msaa: 0, pixelRatio: 0.8,
   },
 };
-const quality = QUALITY[settings.quality] || QUALITY.alta;
+const quality = QUALITY[settings.quality] || QUALITY.media;
 
 // ---------- Motor ----------
 const canvas = document.getElementById('game');
@@ -176,6 +177,9 @@ function makeBulletMesh() {
 // ---------- Arranque ----------
 function boot() {
   world = new World(scene, quality, renderer);
+  // La hierba no se dibuja en el reflejo del agua (capa 1): ahorra mucho y ni se nota.
+  world.grass.layers.set(1);
+  camera.layers.enable(1);
   water = new Water(scene, quality, renderer, world);
   post = createPost(renderer, scene, camera, quality);
   effects = new Effects(scene);
@@ -989,15 +993,40 @@ function updateMarkers() {
 // ---------- Bucle principal ----------
 let last = performance.now();
 let todTimer = 0;
+// Resolución dinámica: si no llega a ~45 FPS, baja la resolución interna; si va sobrado, la sube.
+const perf = { frames: 0, time: 0, fps: 60, pr: quality.pixelRatio, min: 0.5, max: quality.pixelRatio };
+const fpsEl = document.getElementById('fps');
+function updatePerf(realDt) {
+  perf.frames++;
+  perf.time += realDt;
+  if (perf.time < 1) return;
+  perf.fps = perf.frames / perf.time;
+  perf.frames = 0;
+  perf.time = 0;
+  let pr = perf.pr;
+  if (perf.fps < 42) pr = Math.max(perf.min, pr - (perf.fps < 25 ? 0.2 : 0.1));
+  else if (perf.fps > 57) pr = Math.min(perf.max, pr + 0.05);
+  if (Math.abs(pr - perf.pr) > 0.01 && game.state !== 'loading') {
+    perf.pr = pr;
+    renderer.setPixelRatio(pr);
+    if (post) post.setPixelRatio(pr);
+  }
+  if (settings.showFps) {
+    fpsEl.textContent = `${Math.round(perf.fps)} FPS · resolución ${Math.round((pr / (window.devicePixelRatio || 1)) * 100)}%`;
+  }
+}
+
 function frame(now) {
   requestAnimationFrame(frame);
-  const realDt = Math.min(0.05, (now - last) / 1000);
+  const rawDt = Math.min(1, (now - last) / 1000);
+  const realDt = Math.min(0.05, rawDt);
   last = now;
   if (game.state === 'loading') return;
 
   const playing = game.state === 'playing';
   const simDt = playing ? realDt * game.timeScale : game.state === 'menu' ? realDt : 0;
   game.clock += realDt;
+  updatePerf(rawDt);
 
   if (playing) {
     if (!bulletCam.active) {
@@ -1112,6 +1141,14 @@ qual.value = settings.quality;
 qual.addEventListener('change', () => {
   store.set('sierra.quality', qual.value);
   location.reload();
+});
+const fpsOpt = document.getElementById('opt-fps');
+fpsOpt.checked = settings.showFps;
+fpsEl.classList.toggle('hidden', !settings.showFps);
+fpsOpt.addEventListener('change', () => {
+  settings.showFps = fpsOpt.checked;
+  store.set('sierra.fps', fpsOpt.checked);
+  fpsEl.classList.toggle('hidden', !fpsOpt.checked);
 });
 const bc = document.getElementById('opt-bulletcam');
 bc.checked = settings.bulletCam;

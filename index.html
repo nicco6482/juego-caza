@@ -24,6 +24,7 @@
     <div id="optic-hint"></div>
   </div>
   <div id="flash"></div>
+  <div id="fps" class="hidden"></div>
   <div id="letterbox"><i></i><i></i></div>
   <div id="hitmark"></div>
 
@@ -82,12 +83,13 @@
         <label>Sensibilidad del ratón <input id="opt-sens" type="range" min="0.3" max="2.5" step="0.05"></label>
         <label>Calidad gráfica
           <select id="opt-quality">
-            <option value="alta">Alta</option>
-            <option value="media">Media</option>
+            <option value="alta">Alta (gráfica potente)</option>
+            <option value="media">Media (recomendada)</option>
             <option value="baja">Baja (equipos modestos)</option>
           </select>
         </label>
         <label class="check"><input id="opt-bulletcam" type="checkbox"> Cámara de bala en los tiros largos</label>
+        <label class="check"><input id="opt-fps" type="checkbox"> Mostrar FPS</label>
       </details>
       <p class="note">Necesitas ratón y teclado. Mejor con cascos.</p>
     </div>
