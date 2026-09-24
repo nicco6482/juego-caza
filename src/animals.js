@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { part, between, merge, segmentSphere, loft, subdivide } from './geo.js';
 import { customize } from './fog.js';
+import { instantiate, playSlot } from './models.js';
 
 // Piezas con muy poca variación por cara: el detalle lo pone el shader de pelaje.
 const P = (g, c, pos, rot, sc) => part(g, c, pos, rot, sc, 0.012);
@@ -15,7 +16,7 @@ export const SPECIES = {
     col: { body: '#74502f', dark: '#3a2a1b', light: '#c7ae86', rump: '#d9c8a4', nose: '#1d1712', antler: '#d8c7a2' },
   },
   cierva: {
-    name: 'Cierva', legal: false, penalty: 250, scale: 0.86, build: 'deer', antlers: null,
+    name: 'Cierva', fem: true, legal: false, penalty: 250, scale: 0.86, build: 'deer', antlers: null,
     walk: 1.3, run: 12.5, hearing: 46, sight: 90, smell: 120,
     col: { body: '#8a6440', dark: '#4a3622', light: '#d2bb92', rump: '#e2d3b2', nose: '#1d1712' },
   },
@@ -34,6 +35,41 @@ export const SPECIES = {
     walk: 1.4, run: 11.5, hearing: 50, sight: 70, smell: 120,
     col: { body: '#b8622a', dark: '#2a1d15', light: '#efe4d2', rump: '#b8622a', nose: '#1a1310' },
   },
+  gamo: {
+    name: 'Gamo', legal: true, points: 140, scale: 0.78, build: 'deer', antlers: 'fallow', spots: true,
+    walk: 1.3, run: 12, hearing: 44, sight: 85, smell: 115,
+    col: { body: '#b3662f', dark: '#2a1c12', light: '#f3ede2', rump: '#f5f1ea', nose: '#1a1410', antler: '#c9ad85' },
+  },
+  gama: {
+    name: 'Gama', fem: true, legal: true, points: 70, scale: 0.68, build: 'deer', antlers: null, spots: true,
+    walk: 1.3, run: 12, hearing: 46, sight: 88, smell: 115,
+    col: { body: '#b8703a', dark: '#2a1c12', light: '#f3ede2', rump: '#f5f1ea', nose: '#1a1410' },
+  },
+  muflon: {
+    name: 'Muflón', legal: true, points: 160, scale: 0.62, build: 'sheep', horns: 'mouflon',
+    walk: 1.1, run: 10, hearing: 45, sight: 95, smell: 110,
+    col: { body: '#6e4a2c', dark: '#2d1f14', light: '#ece4d4', rump: '#ece4d4', nose: '#e3dccd', horn: '#7a6a54', saddle: '#d9cbb1' },
+  },
+  cabra: {
+    name: 'Macho montés', legal: true, points: 200, scale: 0.72, build: 'sheep', horns: 'ibex',
+    walk: 1.1, run: 9.5, hearing: 48, sight: 110, smell: 120,
+    col: { body: '#8a7457', dark: '#2a2118', light: '#cfc2aa', rump: '#cfc2aa', nose: '#3a3028', horn: '#61574a' },
+  },
+  cabra_h: {
+    name: 'Hembra montés', fem: true, legal: true, points: 90, scale: 0.6, build: 'sheep', horns: 'ibexF',
+    walk: 1.1, run: 9.5, hearing: 50, sight: 110, smell: 120,
+    col: { body: '#a08766', dark: '#4a3b2b', light: '#d8ccb5', rump: '#d8ccb5', nose: '#4a3d33', horn: '#6f6454' },
+  },
+  lobo: {
+    name: 'Lobo', legal: false, penalty: 400, scale: 0.85, build: 'wolf',
+    walk: 1.5, run: 12, hearing: 60, sight: 90, smell: 180,
+    col: { body: '#7a6c5a', dark: '#28221c', light: '#e2d8c6', rump: '#7a6c5a', nose: '#161210' },
+  },
+  liebre: {
+    name: 'Liebre', fem: true, legal: true, points: 130, scale: 0.62, build: 'hare',
+    walk: 1.2, run: 13, hearing: 45, sight: 60, smell: 60,
+    col: { body: '#8a7155', dark: '#2a2018', light: '#ece5d7', rump: '#ece5d7', nose: '#3a2a22' },
+  },
 };
 
 export const ZONES = {
@@ -48,12 +84,19 @@ const BUILDS = {
   deer: { L: 0.92, bl: 1.5, bh: 0.6, bw: 0.46, neckLen: 0.56, neckR: 0.13, hs: 0.17, snout: 0.26, rest: 0.78, graze: 2.1 },
   boar: { L: 0.52, bl: 1.35, bh: 0.74, bw: 0.6, neckLen: 0.22, neckR: 0.27, hs: 0.25, snout: 0.36, rest: 1.25, graze: 1.9 },
   fox: { L: 0.55, bl: 1.45, bh: 0.46, bw: 0.38, neckLen: 0.34, neckR: 0.11, hs: 0.18, snout: 0.3, rest: 0.75, graze: 1.9 },
+  sheep: { L: 0.7, bl: 1.25, bh: 0.56, bw: 0.46, neckLen: 0.34, neckR: 0.14, hs: 0.17, snout: 0.2, rest: 0.95, graze: 2.0 },
+  wolf: { L: 0.58, bl: 1.35, bh: 0.52, bw: 0.42, neckLen: 0.3, neckR: 0.16, hs: 0.23, snout: 0.28, rest: 0.62, graze: 1.9 },
+  hare: { L: 0.36, bl: 0.95, bh: 0.4, bw: 0.3, neckLen: 0.12, neckR: 0.11, hs: 0.16, snout: 0.13, rest: 1.05, graze: 1.75 },
 };
 
 // Pelaje: ruido anisótropo en coordenadas del modelo, así el grano viaja con el animal.
-const material = customize(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.97, envMapIntensity: 0.55 }), 'animal', (sh) => {
+const material = customize(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.97, envMapIntensity: 0.55 }), 'animal', (sh, r, mat) => {
+  sh.uniforms.uSpots = { value: mat.userData.spots || 0 };
+  sh.uniforms.uSpotBand = { value: mat.userData.spotBand || new THREE.Vector2(0, 0) };
   sh.vertexShader = 'varying vec3 vFurPos;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvFurPos = position;');
   sh.fragmentShader = `varying vec3 vFurPos;
+    uniform float uSpots;
+    uniform vec2 uSpotBand;
     float fh(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
     float fn(vec3 x) {
       vec3 i = floor(x), f = fract(x);
@@ -63,7 +106,14 @@ const material = customize(new THREE.MeshStandardMaterial({ vertexColors: true, 
     }
   ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
     float fur = fn(vFurPos * vec3(38.0, 38.0, 11.0)) * 0.6 + fn(vFurPos * vec3(130.0, 130.0, 34.0)) * 0.4;
-    diffuseColor.rgb *= 0.84 + 0.3 * fur;`);
+    diffuseColor.rgb *= 0.84 + 0.3 * fur;
+    if (uSpots > 0.5) {
+      // Motas blancas del gamo en los costados.
+      float band = smoothstep(uSpotBand.x, uSpotBand.x + 0.06, vFurPos.y) * (1.0 - smoothstep(uSpotBand.y - 0.05, uSpotBand.y, vFurPos.y));
+      band *= 1.0 - smoothstep(0.42, 0.55, abs(vFurPos.z + 0.08));
+      float sp = smoothstep(0.74, 0.79, fn(vFurPos * vec3(38.0, 38.0, 30.0)));
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.87, 0.8), sp * band);
+    }`);
 });
 
 const geoCache = new Map();
@@ -86,6 +136,12 @@ const TORSO = {
     [0.25, 0.1, 0.29, 0.4], [0.45, 0.1, 0.25, 0.37], [0.6, 0.05, 0.18, 0.28], [0.66, 0.02, 0.03, 0.03]],
   fox: [[-0.72, 0.03, 0.02, 0.02], [-0.68, 0.03, 0.1, 0.12], [-0.55, 0.02, 0.16, 0.2], [-0.3, 0.0, 0.17, 0.21], [0.0, 0.0, 0.165, 0.21],
     [0.3, 0.02, 0.17, 0.23], [0.52, 0.04, 0.14, 0.2], [0.64, 0.1, 0.09, 0.12], [0.67, 0.12, 0.02, 0.02]],
+  sheep: [[-0.64, 0.06, 0.02, 0.02], [-0.6, 0.05, 0.14, 0.16], [-0.5, 0.03, 0.21, 0.25], [-0.3, 0.01, 0.235, 0.28], [0.0, 0.02, 0.24, 0.29],
+    [0.25, 0.04, 0.23, 0.3], [0.42, 0.06, 0.19, 0.28], [0.53, 0.12, 0.13, 0.19], [0.57, 0.16, 0.02, 0.02]],
+  wolf: [[-0.68, 0.04, 0.02, 0.02], [-0.64, 0.04, 0.12, 0.14], [-0.52, 0.02, 0.18, 0.21], [-0.28, -0.01, 0.18, 0.22], [0.0, 0.0, 0.19, 0.24],
+    [0.28, 0.04, 0.2, 0.27], [0.48, 0.07, 0.17, 0.25], [0.6, 0.13, 0.11, 0.16], [0.64, 0.16, 0.02, 0.02]],
+  hare: [[-0.48, 0.03, 0.02, 0.02], [-0.45, 0.04, 0.12, 0.14], [-0.3, 0.05, 0.16, 0.2], [-0.1, 0.04, 0.15, 0.19], [0.1, 0.03, 0.13, 0.17],
+    [0.28, 0.06, 0.1, 0.14], [0.36, 0.1, 0.02, 0.02]],
 };
 // Patas: [x, y, z, semiancho, semifondo] desde la cadera (escala de ciervo).
 const LEG_FRONT = [[0, 0.06, 0.0, 0.085, 0.11], [0, -0.22, 0.025, 0.068, 0.09], [0, -0.46, 0.0, 0.042, 0.048], [0, -0.52, 0.0, 0.036, 0.042],
@@ -93,8 +149,11 @@ const LEG_FRONT = [[0, 0.06, 0.0, 0.085, 0.11], [0, -0.22, 0.025, 0.068, 0.09], 
 const LEG_HIND = [[0, 0.1, 0.0, 0.1, 0.17], [0, -0.12, -0.04, 0.085, 0.14], [0, -0.36, -0.11, 0.048, 0.058], [0, -0.43, -0.1, 0.035, 0.042],
   [0, -0.82, -0.005, 0.028, 0.032], [0, -0.865, 0.01, 0.033, 0.038], [0, -0.9, 0.03, 0.03, 0.042], [0, -0.92, 0.035, 0.028, 0.036]];
 
-function buildGeometry(key) {
-  if (geoCache.has(key)) return geoCache.get(key);
+// cls: clase de edad (0 joven, 1 adulto, 2 viejo) para cuernas y cuernos.
+function buildGeometry(key, cls = 1) {
+  const cacheKey = `${key}|${cls}`;
+  if (geoCache.has(cacheKey)) return geoCache.get(cacheKey);
+  const ak = [0.72, 1, 1.22][cls];
   const sp = SPECIES[key];
   const b = BUILDS[sp.build];
   const build = sp.build;
@@ -110,12 +169,37 @@ function buildGeometry(key) {
     let col = C.body;
     col = mixc(col, C.light, sm(-0.3, -0.85, s));
     col = mixc(col, C.dark, sm(0.5, 1.0, s) * (build === 'boar' ? 0.6 : 0.35));
-    if (build === 'deer') col = mixc(col, C.rump, sm(-0.56, -0.72, v.z) * sm(-0.55, 0.0, s));
+    if (build === 'deer') {
+      const rump = sm(-0.63, -0.73, v.z) * sm(-0.4, 0.1, s) * (1 - sm(0.5, 0.8, Math.abs(c)));
+      col = mixc(col, C.rump, rump);
+      if (sp.spots) {
+        // Gamo: línea blanca a lo largo del bajo del costado y vientre blanco.
+        const line = sm(-0.26, -0.33, s) * (1 - sm(-0.4, -0.47, s)) * sm(-0.6, -0.45, v.z) * (1 - sm(0.25, 0.4, v.z));
+        col = mixc(col, C.light, line * 0.9);
+        col = mixc(col, C.light, sm(-0.6, -0.75, s) * 0.8);
+        // Borde negro del escudo.
+        col = mixc(col, C.dark, sm(-0.59, -0.63, v.z) * (1 - sm(-0.66, -0.7, v.z)) * sm(-0.2, 0.3, s) * 0.8);
+      }
+    }
     if (build === 'fox') col = mixc(col, C.light, sm(0.35, 0.55, v.z) * sm(-0.05, -0.55, s));
+    if (build === 'wolf') {
+      col = mixc(col, C.dark, sm(0.55, 0.95, s) * 0.45 * sm(0.1, 0.4, v.z));
+      col = mixc(col, C.light, sm(0.3, 0.55, v.z) * sm(0.0, -0.6, s) * 0.7);
+    }
+    if (key === 'muflon') col = mixc(col, C.saddle, sm(0.8, 0.95, Math.abs(c)) * sm(0.2, 0.06, Math.abs(v.z + 0.05)) * sm(-0.3, -0.1, s) * sm(0.3, 0.1, s) * 0.9);
+    if (key === 'cabra') {
+      col = mixc(col, C.dark, sm(-0.15, -0.35, s) * sm(-0.62, -0.45, s) * 0.8);
+      col = mixc(col, C.dark, sm(0.3, 0.5, v.z) * sm(0.2, -0.3, s) * 0.8);
+    }
+    if (build === 'sheep') col = mixc(col, C.rump, sm(-0.5, -0.62, v.z) * sm(-0.6, 0.2, s));
     return col;
   };
   const torso = [loft(torsoSecs, [0, 1, 0], 28, torsoCol, 2.25)];
-  if (build === 'deer') {
+  if (build === 'deer' && sp.spots) {
+    // Cola larga del gamo: blanca con una franja negra.
+    torso.push(P(sphere, sp.col.rump, [0, by + 0.0, -0.79], [0.25, 0, 0], [0.055, 0.14, 0.045]));
+    torso.push(P(sphere, sp.col.dark, [0, by + 0.0, -0.815], [0.25, 0, 0], [0.025, 0.14, 0.03]));
+  } else if (build === 'deer') {
     torso.push(P(sphere, sp.col.rump, [0, by + 0.07, -0.8], [0.3, 0, 0], [0.05, 0.09, 0.05]));
   } else if (build === 'boar') {
     // Crin erizada sobre el lomo.
@@ -125,6 +209,14 @@ function buildGeometry(key) {
       torso.push(P(new THREE.ConeGeometry(0.035, 0.13, 4), sp.col.dark, [0, top, z], [-0.5, 0, 0]));
     }
     torso.push(Bt([0, by + 0.1, -0.66], [0, by - 0.2, -0.74], 0.025, 0.015, sp.col.dark, 5));
+  } else if (build === 'sheep') {
+    torso.push(P(sphere, sp.col.dark, [0, by + 0.06, -0.64], [0.4, 0, 0], [0.04, 0.07, 0.04]));
+  } else if (build === 'hare') {
+    torso.push(P(sphere, sp.col.light, [0, by + 0.05, -0.49], [0, 0, 0], [0.06, 0.06, 0.05]));
+  } else if (build === 'wolf') {
+    const tailSecs = subdivide([[0.0, -0.62, 0.05, 0.05], [-0.1, -0.78, 0.075, 0.08], [-0.28, -0.93, 0.08, 0.085], [-0.45, -1.02, 0.06, 0.065],
+      [-0.52, -1.05, 0.01, 0.01]].map(([dy, z, w, h]) => ({ p: [0, by + dy, z], w, h })), 3);
+    torso.push(loft(tailSecs, [0, 1, 0], 14, (t) => mixc(C.body, C.dark, sm(0.7, 0.85, t)), 2));
   } else if (build === 'fox') {
     const tailSecs = subdivide([[0.02, -0.66, 0.05, 0.05], [-0.02, -0.85, 0.1, 0.11], [-0.1, -1.05, 0.13, 0.14], [-0.2, -1.22, 0.11, 0.12],
       [-0.27, -1.36, 0.05, 0.06], [-0.3, -1.42, 0.01, 0.01]].map(([dy, z, w, h]) => ({ p: [0, by + dy, z], w, h })), 3);
@@ -142,7 +234,7 @@ function buildGeometry(key) {
   const neckCol = (t, c, s) => {
     let col = C.body;
     if (stag) col = mixc(col, C.dark, sm(0.1, 0.8, s) * 0.65);
-    else if (build === 'deer' || build === 'fox') col = mixc(col, C.light, sm(0.3, 0.9, s) * 0.6);
+    else if (build === 'deer' || build === 'fox') col = mixc(col, C.light, sm(0.3, 0.9, s) * (sp.spots ? 0.95 : 0.6));
     return mixc(col, C.dark, sm(-0.5, -1, s) * 0.25);
   };
   const neck = [loft(neckSecs, [0, 0, 1], 20, neckCol, 2.1)];
@@ -153,7 +245,7 @@ function buildGeometry(key) {
     g.applyMatrix4(hm);
     return g;
   };
-  const mw = { deer: 0.8, boar: 0.95, fox: 0.6 }[build], mh = { deer: 0.85, boar: 0.85, fox: 0.6 }[build];
+  const mw = { deer: 0.8, boar: 0.95, fox: 0.6, sheep: 0.85, wolf: 0.7, hare: 0.8 }[build], mh = { deer: 0.85, boar: 0.85, fox: 0.6, sheep: 0.9, wolf: 0.68, hare: 0.85 }[build];
   const snoutEnd = hs * 0.3 + snout;
   const headSecs = subdivide([
     [-hs * 0.55, hs * 0.25, 0.01, 0.01], [-hs * 0.45, hs * 0.28, hs * 0.5, hs * 0.55], [-hs * 0.12, hs * 0.32, hs * 0.64, hs * 0.64],
@@ -166,15 +258,24 @@ function buildGeometry(key) {
     if (build === 'deer') col = mixc(col, C.light, sm(hs * 0.2, hs * 0.5, v.z) * sm(-0.3, -0.8, s) * 0.8);
     if (build === 'fox') col = mixc(col, C.light, sm(0.0, hs * 0.3, v.z) * sm(0.0, -0.5, s));
     if (build === 'boar') col = mixc(col, C.dark, 0.3);
+    if (build === 'wolf') col = mixc(col, C.light, sm(0.0, hs * 0.3, v.z) * sm(0.0, -0.6, s) * 0.8);
+    if (key === 'muflon') col = mixc(col, C.light, sm(hs * 0.25, hs * 0.5, v.z));
+    if (key === 'cabra') col = mixc(col, C.dark, sm(hs * 0.1, hs * 0.4, v.z) * 0.6);
+    if (build === 'sheep' && key !== 'muflon') return mixc(col, C.nose, sm(hs * 0.3 + snout * 0.8, snoutEnd, v.z) * 0.6);
     return mixc(col, C.nose, sm(hs * 0.3 + snout * 0.72, snoutEnd - 0.005, v.z));
   };
   neck.push(H(loft(headSecs, [0, 1, 0], 22, headCol, 2.2)));
   for (const sx of [-1, 1]) {
     neck.push(H(P(sphere, '#0b0908', [sx * hs * 0.5, hs * 0.44, hs * 0.16], [0, 0, 0], [hs * 0.13, hs * 0.13, hs * 0.13])));
   }
-  const earLen = build === 'fox' ? hs * 1.15 : build === 'boar' ? hs * 0.75 : hs * 1.3;
+  const earLen = { fox: hs * 1.15, wolf: hs * 0.8, boar: hs * 0.75, sheep: hs * 0.85, hare: hs * 2.6 }[build] ?? hs * 1.3;
   for (const sx of [-1, 1]) {
-    if (build === 'fox') {
+    if (build === 'hare') {
+      const rot = [-0.5, 0, -sx * 0.25];
+      const pos = [sx * hs * 0.3, hs * 0.7 + earLen * 0.45, -hs * 0.35];
+      neck.push(H(P(sphere, sp.col.body, pos, rot, [hs * 0.22, earLen * 0.5, hs * 0.09])));
+      neck.push(H(P(sphere, sp.col.dark, [pos[0], pos[1] + earLen * 0.4, pos[2] - earLen * 0.2], rot, [hs * 0.16, earLen * 0.13, hs * 0.095])));
+    } else if (build === 'fox' || build === 'wolf') {
       neck.push(H(P(new THREE.ConeGeometry(hs * 0.3, earLen, 8), sp.col.dark, [sx * hs * 0.45, hs * 0.75 + earLen * 0.4, -hs * 0.2], [-0.2, 0, -sx * 0.25])));
     } else {
       const rot = [-0.35, 0, -sx * (build === 'boar' ? 0.5 : 1.0)];
@@ -191,19 +292,25 @@ function buildGeometry(key) {
   if (sp.antlers === 'stag') {
     for (const sx of [-1, 1]) {
       const p0 = [sx * hs * 0.4, hs * 0.95, -hs * 0.05];
-      const p1 = [p0[0] + sx * 0.2, p0[1] + 0.3, -0.12];
-      const p2 = [p1[0] + sx * 0.13, p1[1] + 0.3, -0.1];
-      const p3 = [p2[0] + sx * 0.06, p2[1] + 0.26, -0.02];
-      const p4 = [p3[0] - sx * 0.02, p3[1] + 0.2, 0.08];
-      const beam = [[p0, p1, 0.042, 0.036], [p1, p2, 0.036, 0.03], [p2, p3, 0.03, 0.024], [p3, p4, 0.024, 0.01]];
+      const p1 = [p0[0] + sx * 0.2 * ak, p0[1] + 0.3 * ak, -0.12 * ak];
+      const p2 = [p1[0] + sx * 0.13 * ak, p1[1] + 0.3 * ak, -0.1 * ak];
+      const p3 = [p2[0] + sx * 0.06 * ak, p2[1] + 0.26 * ak, -0.02 * ak];
+      const p4 = [p3[0] - sx * 0.02 * ak, p3[1] + 0.2 * ak, 0.08 * ak];
+      const r = 0.8 + ak * 0.2;
+      const beam = [[p0, p1, 0.042 * r, 0.036 * r], [p1, p2, 0.036 * r, 0.03 * r], [p2, p3, 0.03 * r, 0.024 * r], [p3, p4, 0.024 * r, 0.01]];
       for (const [a, c, r1, r2] of beam) neck.push(H(Bt(a, c, r1, r2, sp.col.antler, 8)));
       neck.push(H(P(sphere, '#5a4a36', p0, [0, 0, 0], [0.055, 0.035, 0.055])));
       const tine = (from, dir, len, r) => neck.push(H(Bt(from, [from[0] + dir[0] * len, from[1] + dir[1] * len, from[2] + dir[2] * len], r, 0.006, sp.col.antler, 6)));
-      tine([p0[0] + sx * 0.03, p0[1] + 0.07, p0[2]], [sx * 0.1, 0.35, 0.93], 0.26, 0.026);
-      tine([p0[0] + sx * 0.08, p0[1] + 0.16, -0.05], [sx * 0.1, 0.45, 0.88], 0.22, 0.022);
-      tine(p2, [sx * 0.15, 0.3, 0.94], 0.2, 0.02);
-      tine(p3, [sx * 0.5, 0.75, -0.3], 0.16, 0.017);
-      tine(p3, [-sx * 0.2, 0.8, 0.45], 0.15, 0.016);
+      tine([p0[0] + sx * 0.03, p0[1] + 0.07, p0[2]], [sx * 0.1, 0.35, 0.93], 0.26 * ak, 0.026);
+      if (cls > 0) tine([p0[0] + sx * 0.08, p0[1] + 0.16 * ak, -0.05], [sx * 0.1, 0.45, 0.88], 0.22 * ak, 0.022);
+      tine(p2, [sx * 0.15, 0.3, 0.94], 0.2 * ak, 0.02);
+      tine(p3, [sx * 0.5, 0.75, -0.3], 0.16 * ak, 0.017);
+      if (cls > 0) tine(p3, [-sx * 0.2, 0.8, 0.45], 0.15 * ak, 0.016);
+      if (cls > 1) {
+        // Corona de un venado viejo.
+        tine(p4, [sx * 0.4, 0.8, 0.3], 0.12, 0.014);
+        tine(p3, [sx * 0.2, 0.6, -0.7], 0.12, 0.014);
+      }
     }
   } else if (sp.antlers === 'roe') {
     for (const sx of [-1, 1]) {
@@ -216,11 +323,87 @@ function buildGeometry(key) {
     }
   }
 
+  if (sp.antlers === 'fallow') {
+    // Gamo: vara alta con candil y puntas, que arriba se abre en una pala plana con dedos.
+    const ak2 = ak * 1.45;
+    for (const sx of [-1, 1]) {
+      const ak = ak2;
+      const p0 = [sx * hs * 0.38, hs * 0.95, -hs * 0.05];
+      const p1 = [p0[0] + sx * 0.07 * ak, p0[1] + 0.2 * ak, -0.05 * ak];
+      const p2 = [p1[0] + sx * 0.06 * ak, p1[1] + 0.16 * ak, -0.1 * ak];
+      neck.push(H(Bt(p0, p1, 0.028, 0.024, sp.col.antler, 8)));
+      neck.push(H(Bt(p1, p2, 0.024, 0.02, sp.col.antler, 8)));
+      neck.push(H(P(sphere, '#5a4a36', p0, [0, 0, 0], [0.038, 0.026, 0.038])));
+      // Candil (hacia delante, abajo) y punta media.
+      neck.push(H(Bt([p0[0], p0[1] + 0.04, p0[2]], [p0[0] + sx * 0.02, p0[1] + 0.13 * ak, 0.15 * ak], 0.017, 0.005, sp.col.antler, 6)));
+      neck.push(H(Bt([p1[0], p1[1] - 0.02, p1[2]], [p1[0] + sx * 0.02, p1[1] + 0.06 * ak, 0.13 * ak], 0.015, 0.005, sp.col.antler, 6)));
+      // Pala: placa que se ensancha hacia arriba y hacia atrás.
+      const palmPts = subdivide([
+        { p: p2, w: 0.012, h: 0.022 },
+        { p: [p2[0] + sx * 0.03 * ak, p2[1] + 0.1 * ak, p2[2] - 0.05 * ak], w: 0.011, h: 0.055 * ak },
+        { p: [p2[0] + sx * 0.05 * ak, p2[1] + 0.2 * ak, p2[2] - 0.08 * ak], w: 0.01, h: 0.08 * ak },
+        { p: [p2[0] + sx * 0.06 * ak, p2[1] + 0.27 * ak, p2[2] - 0.08 * ak], w: 0.008, h: 0.06 * ak },
+      ], 3);
+      neck.push(H(loft(palmPts, [0, 0, 1], 10, () => lin(sp.col.antler), 2.8)));
+      // Dedos en el borde de la pala.
+      const fingers = 3 + cls;
+      for (let i = 0; i < fingers; i++) {
+        const t = (i + 0.5) / fingers;
+        const base = [p2[0] + sx * (0.03 + t * 0.03) * ak, p2[1] + (0.1 + t * 0.17) * ak, p2[2] - (0.05 + t * 0.04) * ak - 0.06 * ak];
+        neck.push(H(Bt(base, [base[0] + sx * 0.02, base[1] + 0.05 * ak, base[2] - 0.05 * ak], 0.011, 0.003, sp.col.antler, 5)));
+      }
+      const top = [p2[0] + sx * 0.06 * ak, p2[1] + 0.27 * ak, p2[2] - 0.02 * ak];
+      neck.push(H(Bt(top, [top[0] + sx * 0.01, top[1] + 0.07 * ak, top[2] + 0.03 * ak], 0.011, 0.003, sp.col.antler, 5)));
+    }
+  }
+  if (sp.horns) {
+    const hornSegs = (pts, r0, r1) => {
+      const sm2 = subdivide(pts.map((q) => ({ p: q, w: 1, h: 1 })), 4);
+      for (let i = 0; i < sm2.length - 1; i++) {
+        const t = i / (sm2.length - 1);
+        neck.push(H(Bt(sm2[i].p, sm2[i + 1].p, r0 + (r1 - r0) * t, r0 + (r1 - r0) * (t + 1 / sm2.length), sp.col.horn, 9)));
+      }
+    };
+    for (const sx of [-1, 1]) {
+      if (sp.horns === 'mouflon') {
+        // Espiral: sube, va hacia atrás, baja por detrás de la oreja y vuelve hacia delante.
+        const pts = [];
+        const cy = hs * 0.5, cz = -hs * 0.55;
+        const phi0 = Math.atan2(hs * 0.45, hs * 0.45);
+        for (let i = 0; i <= 10; i++) {
+          const t = i / 10;
+          const phi = phi0 + t * Math.PI * 1.55 * (0.8 + ak * 0.2);
+          const R = hs * 0.62 * (1 + 0.3 * t) * ak;
+          pts.push([sx * (hs * 0.32 + t * 0.13 * ak), cy + Math.sin(phi) * R, cz + Math.cos(phi) * R]);
+        }
+        hornSegs(pts, 0.05 * ak, 0.012);
+      } else if (sp.horns === 'ibex') {
+        // Cabra montés: cuernos en lira, hacia atrás y afuera, con las puntas hacia arriba.
+        const b0 = [sx * hs * 0.3, hs * 0.9, -hs * 0.05];
+        const pts = [b0, [b0[0] + sx * 0.04 * ak, b0[1] + 0.07 * ak, b0[2] - 0.14 * ak], [b0[0] + sx * 0.14 * ak, b0[1] + 0.1 * ak, b0[2] - 0.35 * ak],
+          [b0[0] + sx * 0.28 * ak, b0[1] + 0.06 * ak, b0[2] - 0.55 * ak], [b0[0] + sx * 0.36 * ak, b0[1] + 0.14 * ak, b0[2] - 0.68 * ak]];
+        hornSegs(pts, 0.06 * ak, 0.012);
+        // Nudos anuales en la cara delantera del cuerno.
+        const knots = subdivide(pts.map((q) => ({ p: q, w: 1, h: 1 })), 4);
+        for (let i = 1; i < knots.length * 0.7; i += 2) {
+          const t = i / knots.length;
+          neck.push(H(P(sphere, sp.col.horn, knots[i].p, [0, 0, 0], [0.066 * (1 - t * 0.7) * ak, 0.02, 0.066 * (1 - t * 0.7) * ak])));
+        }
+      } else {
+        const b0 = [sx * hs * 0.28, hs * 0.9, -hs * 0.05];
+        hornSegs([b0, [b0[0] + sx * 0.03, b0[1] + 0.12, b0[2] - 0.07], [b0[0] + sx * 0.06, b0[1] + 0.19, b0[2] - 0.2]], 0.022, 0.006);
+      }
+    }
+  }
+
   // --- Patas (pivote en la cadera) ---
   const k = L / 0.92;
-  const th = { deer: 1, boar: 1.55, fox: 0.85 }[build];
+  const th = { deer: 1, boar: 1.55, fox: 0.85, sheep: 1.15, wolf: 1.3, hare: 1.1 }[build];
   const legCol = (t) => {
     let col = mixc(C.body, C.dark, sm(0.45, 0.8, t) * (build === 'fox' ? 0.9 : 0.35));
+    if (key === 'muflon') col = mixc(col, C.light, sm(0.4, 0.6, t));
+    if (sp.spots) col = mixc(col, C.light, sm(0.15, 0.5, t) * 0.45);
+    if (key === 'cabra' || build === 'wolf') col = mixc(col, C.dark, sm(0.15, 0.4, t) * sm(0.85, 0.6, t) * 0.7);
     return mixc(col, lin('#1c1712'), sm(0.86, 0.92, t));
   };
   const makeLeg = (table) => loft(subdivide(table.map(([x, y, z, w, h]) => ({ p: [x, y * k, z * k], w: w * th, h: h * th })), 3), [0, 0, 1], 14, legCol, 2.1);
@@ -232,7 +415,7 @@ function buildGeometry(key) {
     front: merge([makeLeg(LEG_FRONT)]),
     hind: merge([makeLeg(LEG_HIND)]),
   };
-  geoCache.set(key, result);
+  geoCache.set(cacheKey, result);
   return result;
 }
 
@@ -248,18 +431,34 @@ export class Animal {
     this.key = key;
     this.sp = SPECIES[key];
     this.herd = herd;
-    const g = buildGeometry(key);
+    // Clase de edad: los machos jóvenes llevan cuernas pequeñas; los viejos, grandes.
+    const horned = this.sp.antlers || this.sp.horns;
+    const rr = Math.random();
+    this.cls = horned ? (rr < 0.3 ? 0 : rr < 0.8 ? 1 : 2) : 1;
+    const g = buildGeometry(key, this.cls);
     this.b = g.b;
     const b = g.b;
+    // Cada individuo con su tono de pelaje.
+    const mat = material.clone();
+    // clone() no copia los ganchos del shader: se reutilizan los del material base.
+    mat.onBeforeCompile = material.onBeforeCompile;
+    mat.customProgramCacheKey = material.customProgramCacheKey;
+    const v = 0.9 + Math.random() * 0.2;
+    mat.color.setRGB(v * (0.96 + Math.random() * 0.08), v, v * (0.94 + Math.random() * 0.08));
+    if (this.sp.spots) {
+      mat.userData.spots = 1;
+      mat.userData.spotBand = new THREE.Vector2(g.by - b.bh * 0.12, g.by + b.bh * 0.34);
+    }
+    this.material = mat;
 
     this.group = new THREE.Group();
     this.group.rotation.order = 'YXZ';
-    const s = this.sp.scale * (0.92 + Math.random() * 0.16);
+    const s = this.sp.scale * (0.9 + Math.random() * 0.14) * (horned ? [0.88, 1, 1.08][this.cls] : 1);
     this.scale = s;
     this.group.scale.setScalar(s);
 
     const mk = (geo) => {
-      const m = new THREE.Mesh(geo, material);
+      const m = new THREE.Mesh(geo, mat);
       m.castShadow = true;
       m.receiveShadow = true;
       return m;
@@ -274,6 +473,10 @@ export class Animal {
     this.neck.add(mk(g.neck));
     this.body.add(this.neck);
 
+    // Modelo 3D real si existe: el esqueleto generado sigue ahí (invisible) para las zonas de impacto.
+    this.model = instantiate(key, b.bl * 1.12);
+    if (this.model) this.group.add(this.model.root);
+
     this.legs = [];
     const hx = b.bw * 0.27;
     for (const [lx, lz, hind] of [[hx, b.bl * 0.3, false], [-hx, b.bl * 0.3, false], [hx, -b.bl * 0.32, true], [-hx, -b.bl * 0.32, true]]) {
@@ -282,6 +485,12 @@ export class Animal {
       pivot.add(mk(hind ? g.hind : g.front));
       this.body.add(pivot);
       this.legs.push(pivot);
+    }
+
+    if (this.model) {
+      this.body.traverse((o) => {
+        if (o.isMesh) o.visible = false;
+      });
     }
 
     // Zonas de impacto como puntos ligados al esqueleto.
@@ -435,7 +644,7 @@ export class Animal {
     }
 
     // Berrea: los machos de ciervo braman de vez en cuando si están tranquilos.
-    if (this.sp.antlers === 'stag' && this.state !== 'flee' && this.onRoar) {
+    if ((this.sp.antlers === 'stag' || this.key === 'lobo') && this.state !== 'flee' && this.onRoar) {
       this.roarT = (this.roarT ?? 8 + Math.random() * 40) - dt;
       if (this.roarT <= 0) {
         this.roarT = 25 + Math.random() * 45;
@@ -484,6 +693,8 @@ export class Animal {
         this.targetSpeed = sp.run * (this.wounded ? 0.62 : 1);
         const away = Math.atan2(this.pos.x - this.threat.x, this.pos.z - this.threat.z);
         this.desired = away + this.fleeJitter + Math.sin(this.phase * 0.07) * 0.25;
+        // La liebre huye en zigzag.
+        if (this.sp.build === 'hare') this.desired += Math.sign(Math.sin(this.phase * 0.35)) * 0.7;
         neckTarget = b.rest - 0.1;
         if (this.timer <= 0) {
           this.suspicion = 0.7;
@@ -579,7 +790,22 @@ export class Animal {
     this.body.rotation.x = Math.sin(p + 0.8) * 0.09 * run;
     this.neck.rotation.x = this.neckPitch + Math.sin(p + 1.2) * 0.12 * run;
     this.neck.rotation.y = this.neckYaw;
-    if (this.state === 'graze') this.neck.rotation.x += Math.sin(performance.now() * 0.004 + this.id) * 0.05;
+    if (this.model && this.group.visible) {
+      const m = this.model;
+      if (this.speed > this.sp.walk * 1.6) playSlot(m, 'run', 0.25, clamp(this.speed / (this.sp.run * 0.7), 0.6, 1.6));
+      else if (this.speed > 0.25) playSlot(m, 'walk', 0.3, clamp(this.speed / this.sp.walk, 0.5, 1.8));
+      else if (this.state === 'graze') playSlot(m, 'eat', 0.5);
+      else playSlot(m, 'idle', 0.5);
+      m.mixer.update(dt);
+    }
+    const now = performance.now() * 0.001;
+    if (this.state === 'graze') this.neck.rotation.x += Math.sin(now * 4 + this.id) * 0.05;
+    // Respiración: más rápida tras correr.
+    this.breath = Math.max(0, (this.breath || 0) + (run > 0.5 ? dt * 0.3 : -dt * 0.05));
+    const br = Math.sin(now * (2.2 + this.breath * 4) + this.id);
+    this.body.scale.set(1 + br * 0.008, 1 + br * 0.012, 1);
+    // Pequeños giros de cabeza cuando está quieto.
+    if (this.speed < 0.2 && this.state !== 'graze') this.neck.rotation.y += Math.sin(now * 0.7 + this.id * 3) * 0.15;
     void b;
   }
 
@@ -597,6 +823,16 @@ export class Animal {
 
   updateDeath(dt) {
     this.deathT += dt;
+    if (this.model && this.model.actions.death) {
+      // El modelo trae su propia animación de muerte.
+      playSlot(this.model, 'death', 0.15);
+      this.model.mixer.update(dt);
+      this.speed = Math.max(0, this.speed - 14 * dt);
+      this.pos.x += Math.sin(this.heading) * this.speed * dt;
+      this.pos.z += Math.cos(this.heading) * this.speed * dt;
+      this.syncTransform();
+      return;
+    }
     const t = clamp(this.deathT / 0.75, 0, 1);
     const e = t * t * (3 - 2 * t);
     // Inercia: si iba corriendo, se desliza un poco al caer.
@@ -692,6 +928,20 @@ const HERD_TYPES = {
   corzos: () => (Math.random() < 0.5 ? ['corzo'] : ['corzo', 'corzo']),
   jabalies: () => Array.from({ length: 2 + Math.floor(Math.random() * 3) }, () => 'jabali'),
   zorro: () => ['zorro'],
+  gamos: () => {
+    const list = Math.random() < 0.4 ? ['gamo', 'gamo'] : ['gamo'];
+    const does = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < does; i++) list.push('gama');
+    return list;
+  },
+  muflones: () => Array.from({ length: 2 + Math.floor(Math.random() * 4) }, () => 'muflon'),
+  cabras: () => {
+    const list = Math.random() < 0.5 ? ['cabra', 'cabra'] : ['cabra'];
+    for (let i = 0; i < 1 + Math.floor(Math.random() * 3); i++) list.push('cabra_h');
+    return list;
+  },
+  lobos: () => (Math.random() < 0.5 ? ['lobo'] : ['lobo', 'lobo']),
+  liebre: () => ['liebre'],
 };
 
 export class Fauna {
@@ -709,20 +959,24 @@ export class Fauna {
     this.herds = [];
   }
 
-  findSpot(px, pz, minD, maxD, forestMax) {
-    for (let i = 0; i < 80; i++) {
+  findSpot(px, pz, minD, maxD, forestMax, rocky = false) {
+    for (let i = 0; i < (rocky ? 300 : 80); i++) {
       const a = Math.random() * Math.PI * 2;
       const r = minD + Math.random() * (maxD - minD);
       const x = px + Math.sin(a) * r, z = pz + Math.cos(a) * r;
       if (Math.abs(x) > PLAY_HALF - 40 || Math.abs(z) > PLAY_HALF - 40) continue;
-      if (forestAt(x, z) > forestMax || slopeAt(x, z) > 0.4 || waterDepth(x, z) > -0.3) continue;
+      const sl = slopeAt(x, z);
+      if (forestAt(x, z) > forestMax || sl > (rocky ? 0.6 : 0.4) || waterDepth(x, z) > -0.3) continue;
+      // Las cabras monteses buscan laderas empinadas y altas.
+      if (rocky && sl < 0.18 && groundAt(x, z) < 35 && i < 250) continue;
       return [x, z];
     }
     return null;
   }
 
   spawnHerd(type, px, pz, minD, maxD, at = null) {
-    const spot = at || this.findSpot(px, pz, minD, maxD, type === 'jabalies' ? 0.3 : 0.08);
+    const forestMax = { jabalies: 0.3, lobos: 0.3, cabras: 0.35, muflones: 0.15 }[type] ?? 0.08;
+    const spot = at || this.findSpot(px, pz, minD, maxD, forestMax, type === 'cabras' || type === 'muflones');
     if (!spot) return;
     const herd = new Herd(spot[0], spot[1]);
     for (const key of HERD_TYPES[type]()) {
@@ -741,7 +995,7 @@ export class Fauna {
 
   // Manadas en la orilla del lago: bajan a beber y es donde mejor se ven de cerca.
   spawnLakeHerds(lake) {
-    const types = ['ciervos', 'ciervos', 'corzos', 'jabalies', 'ciervos'];
+    const types = ['ciervos', 'gamos', 'corzos', 'jabalies'];
     let placed = 0;
     for (let k = 0; k < 60 && placed < types.length; k++) {
       const a = (k / 60) * Math.PI * 2 * 7.3;
@@ -759,7 +1013,7 @@ export class Fauna {
   spawnInitial(px, pz, lake) {
     if (lake) this.spawnLakeHerds(lake);
     const plan = {
-      ciervos: 12, corzos: 12, jabalies: 8, zorro: 6,
+      ciervos: 8, gamos: 4, corzos: 8, jabalies: 5, muflones: 3, cabras: 3, zorro: 4, lobos: 2, liebre: 6,
     };
     for (const [t, n] of Object.entries(plan)) {
       // La mayoría cerca del puesto (se distinguen a simple vista); el resto, más lejos.
@@ -791,8 +1045,8 @@ export class Fauna {
     if (this.respawnTimer <= 0) {
       this.respawnTimer = 20;
       const legalAlive = this.animals.filter((a) => a.alive && a.sp.legal).length;
-      if (legalAlive < 60) {
-        const types = ['ciervos', 'ciervos', 'corzos', 'corzos', 'jabalies', 'zorro'];
+      if (legalAlive < 55) {
+        const types = ['ciervos', 'ciervos', 'gamos', 'corzos', 'corzos', 'jabalies', 'muflones', 'cabras', 'zorro', 'liebre'];
         this.spawnHerd(types[Math.floor(Math.random() * types.length)], ctx.player.x, ctx.player.z, 120, 300);
       }
     }

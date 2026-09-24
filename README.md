@@ -1,11 +1,13 @@
 # Sierra Silenciosa
 
+### [▶ Jugar ahora](https://nicco6482.github.io/juego-caza/)
+
 Juego de caza en primera persona con rifle de precisión, hecho con three.js y sin dependencias externas.
 
 Abre `index.html` con un servidor local (`python3 -m http.server`) y entra en `http://localhost:8000`.
 
 - Balística con caída de la bala, rozamiento y deriva por viento, alza de 100 a 400 m y retícula mil-dot.
-- Animales que te oyen, te ven y te huelen según el viento: ciervo, corzo, jabalí, zorro y cierva (protegida).
+- Animales que te oyen, te ven y te huelen según el viento: ciervo, gamo, corzo, jabalí, muflón, cabra montés, zorro y liebre; la cierva y el lobo ibérico están protegidos.
 - Zonas de impacto (corazón, pulmones, cabeza, cuello, cuerpo), rastro de sangre y cámara de bala.
 
 ## Gráficos
@@ -27,3 +29,21 @@ Descarga texturas libres (por ejemplo de [Poly Haven](https://polyhaven.com/text
 ```
 
 Cualquier clave que falte sigue usando la textura generada. Los mapas de relieve tienen que ser del tipo OpenGL (`nor_gl`).
+
+### Usar modelos 3D reales para los animales
+
+Los animales se generan por código, pero el juego puede usar modelos de verdad (glTF/GLB con esqueleto y animaciones). Cópialos en `assets/models/` y decláralos en `assets/models/manifest.json`, una entrada por especie (`ciervo`, `cierva`, `gamo`, `gama`, `corzo`, `jabali`, `muflon`, `cabra`, `cabra_h`, `zorro`, `lobo`, `liebre`):
+
+```json
+{
+  "ciervo": {
+    "file": "ciervo.glb",
+    "anims": { "idle": "Idle", "walk": "Walk", "run": "Gallop", "eat": "Eating", "death": "Death" }
+  }
+}
+```
+
+- `anims` es opcional: si no se indica, se buscan animaciones cuyo nombre contenga *idle*, *walk*, *run/gallop*, *eat/graze* y *death*.
+- Opcionales: `scale` (si no, se ajusta al tamaño del animal), `rotationY` (en radianes, si el modelo no mira hacia +Z) y `offsetY`.
+- Las zonas de impacto siguen siendo las del animal generado, así que conviene que el modelo tenga proporciones realistas.
+- Revisa la licencia de cada modelo (CC0 o CC-BY con atribución).

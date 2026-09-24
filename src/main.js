@@ -8,6 +8,7 @@ import { MUZZLE, stepBullet, zeroAngle } from './ballistics.js';
 import { buildRifle } from './rifle.js';
 import { Hud } from './hud.js';
 import { createPost } from './post.js';
+import { loadModels } from './models.js';
 
 // ---------- Ajustes ----------
 const HUNT_TIME = 600;
@@ -183,7 +184,9 @@ function boot() {
     onBledOut: onBledOut,
     onRoar: (a) => {
       if (game.state !== 'playing') return;
-      sfx.roar(a.distToPlayer, Math.sin(relativeBearing(a.pos)));
+      const pan = Math.sin(relativeBearing(a.pos));
+      if (a.key === 'lobo') sfx.howl(a.distToPlayer, pan);
+      else sfx.roar(a.distToPlayer, pan);
     },
     onAlarm: (a) => {
       if (game.state !== 'playing') return;
@@ -196,12 +199,15 @@ function boot() {
   rifle.group.position.set(0.19, -0.2, -0.42);
   makeBulletMesh();
 
-  // Mundo de fondo para el menú.
-  fauna.spawnInitial(0, 0, LAKE);
-  game.state = 'menu';
-  document.getElementById('loading').classList.add('hidden');
-  document.getElementById('menu').classList.remove('hidden');
-  showBest();
+  // Modelos 3D opcionales (si no hay, se usan los generados por código).
+  loadModels().finally(() => {
+    // Mundo de fondo para el menú.
+    fauna.spawnInitial(0, 0, LAKE);
+    game.state = 'menu';
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('menu').classList.remove('hidden');
+    showBest();
+  });
 }
 
 function showBest() {
@@ -237,7 +243,8 @@ function newHunt() {
   hud.setScore(0);
   hud.setStance('stand');
   refreshAmmo();
-  hud.feed('Temporada abierta: ciervo, corzo, jabalí y zorro. La cierva está protegida.');
+  hud.feed('Temporada abierta: ciervo, gamo, corzo, jabalí, muflón, cabra montés, zorro y liebre.');
+  hud.feed('Protegidos: la cierva y el lobo ibérico.', 'bad');
   hud.feed('Es época de berrea: escucha a los ciervos para saber dónde están.');
   hud.tip('Clic derecho o F: visor · B: prismáticos · Mira el viento antes de acercarte', 6);
 }
@@ -647,16 +654,16 @@ function onAnimalHit(animal, zone, dist, res) {
   hud.hitmark(res === 'kill');
   if (res === 'wound') {
     animal.woundDist = dist;
-    hud.banner('HERIDO', 'Sigue el rastro de sangre antes de que se pierda', 'warn');
-    hud.feed(`${sp.name} herido a ${Math.round(dist)} m`, 'warn');
+    hud.banner(sp.fem ? 'HERIDA' : 'HERIDO', 'Sigue el rastro de sangre antes de que se pierda', 'warn');
+    hud.feed(`${sp.name} ${sp.fem ? 'herida' : 'herido'} a ${Math.round(dist)} m`, 'warn');
     return;
   }
   animal.killedByPlayer = true;
   if (!sp.legal) {
     game.score -= sp.penalty;
     game.log.push({ name: sp.name, note: 'Protegida', dist, pts: -sp.penalty });
-    hud.banner(`¡${sp.name.toUpperCase()} PROTEGIDA!`, `Sanción de la guardería · −${sp.penalty}`, 'bad');
-    hud.feed(`Has abatido una ${sp.name.toLowerCase()}: −${sp.penalty}`, 'bad');
+    hud.banner(`¡${sp.name.toUpperCase()} ${sp.fem ? 'PROTEGIDA' : 'PROTEGIDO'}!`, `Sanción de la guardería · −${sp.penalty}`, 'bad');
+    hud.feed(`Has abatido ${sp.fem ? 'una' : 'un'} ${sp.name.toLowerCase()}: −${sp.penalty}`, 'bad');
   } else {
     const z = ZONES[zone];
     let pts = Math.round(sp.points * z.mult + dist * 0.8);
@@ -668,7 +675,7 @@ function onAnimalHit(animal, zone, dist, res) {
     game.score += pts;
     game.longest = Math.max(game.longest, dist);
     game.log.push({ name: sp.name, note, dist, pts });
-    hud.banner(`${sp.name.toUpperCase()} ABATIDO`, `${note} · ${Math.round(dist)} m · +${pts}`, 'good');
+    hud.banner(`${sp.name.toUpperCase()} ${sp.fem ? 'ABATIDA' : 'ABATIDO'}`, `${note} · ${Math.round(dist)} m · +${pts}`, 'good');
     hud.feed(`${sp.name} · ${note} · ${Math.round(dist)} m · +${pts}`, 'good');
   }
   hud.setScore(game.score);
@@ -681,12 +688,12 @@ function onBledOut(animal) {
   if (!sp.legal) {
     game.score -= sp.penalty;
     game.log.push({ name: sp.name, note: 'Protegida', dist: animal.woundDist || 0, pts: -sp.penalty });
-    hud.feed(`La ${sp.name.toLowerCase()} herida ha muerto: −${sp.penalty}`, 'bad');
+    hud.feed(`${sp.fem ? 'La' : 'El'} ${sp.name.toLowerCase()} ${sp.fem ? 'herida' : 'herido'} ha muerto: −${sp.penalty}`, 'bad');
   } else {
     const pts = Math.round(sp.points * 0.4 + (animal.woundDist || 0) * 0.3);
     game.score += pts;
     game.log.push({ name: sp.name, note: 'Rastreo', dist: animal.woundDist || 0, pts });
-    hud.feed(`El ${sp.name.toLowerCase()} herido ha caído · rastreo · +${pts}`, 'warn');
+    hud.feed(`${sp.fem ? 'La' : 'El'} ${sp.name.toLowerCase()} ${sp.fem ? 'herida' : 'herido'} ha caído · rastreo · +${pts}`, 'warn');
   }
   hud.setScore(game.score);
 }
@@ -958,7 +965,7 @@ function updateMarkers() {
     if (player.binoc && a.alive && d < 800) {
       _proj.set(a.pos.x, a.pos.y + 0.9 * a.scale, a.pos.z).sub(camera.position).normalize();
       if (_proj.dot(lookDir) > Math.cos(THREE.MathUtils.degToRad(4.5))) {
-        if (a.spottedUntil < now) hud.feed(`Avistado: ${a.sp.name.toLowerCase()} a ${Math.round(d)} m${a.sp.legal ? '' : ' (protegida)'}`, a.sp.legal ? '' : 'bad');
+        if (a.spottedUntil < now) hud.feed(`Avistado: ${a.sp.name.toLowerCase()} a ${Math.round(d)} m${a.sp.legal ? '' : a.sp.fem ? ' (protegida)' : ' (protegido)'}`, a.sp.legal ? '' : 'bad');
         a.spottedUntil = now + 45;
       }
     }
@@ -973,8 +980,8 @@ function updateMarkers() {
     if (!a.alive) kind = 'dead';
     else if (a.state === 'flee') sub += ' · huye';
     else if (a.state === 'alert') sub += ' · alerta';
-    if (a.wounded && a.alive) sub += ' · herido';
-    list.push({ x, y, title: a.sp.name + (a.sp.legal ? '' : ' · protegida'), sub, kind });
+    if (a.wounded && a.alive) sub += a.sp.fem ? ' · herida' : ' · herido';
+    list.push({ x, y, title: a.sp.name + (a.sp.legal ? '' : a.sp.fem ? ' · protegida' : ' · protegido'), sub, kind });
   }
   hud.setMarkers(list);
 }

@@ -280,6 +280,43 @@ export class Sfx {
     }
   }
 
+  // Aullido de lobo, lejano y con mucho eco.
+  howl(dist, pan) {
+    if (!this.ctx || dist > 1200) return;
+    const ctx = this.ctx, t = ctx.currentTime + Math.min(dist / 343, 2);
+    const vol = Math.min(0.35, 70 / (dist + 80));
+    const dest = this.out(pan, vol, 1.4);
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    const f = 380 + Math.random() * 60;
+    o.frequency.setValueAtTime(f * 0.75, t);
+    o.frequency.linearRampToValueAtTime(f * 1.3, t + 0.9);
+    o.frequency.setValueAtTime(f * 1.3, t + 2.2);
+    o.frequency.linearRampToValueAtTime(f * 0.8, t + 3.4);
+    const vib = ctx.createOscillator();
+    vib.frequency.value = 5;
+    const vg = ctx.createGain();
+    vg.gain.value = 7;
+    vib.connect(vg).connect(o.frequency);
+    const o2 = ctx.createOscillator();
+    o2.type = 'triangle';
+    o2.frequency.value = f * 2;
+    const g2 = ctx.createGain();
+    g2.gain.value = 0.15;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(1, t + 0.6);
+    g.gain.setValueAtTime(1, t + 2.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 3.5);
+    o.connect(g);
+    o2.connect(g2).connect(g);
+    g.connect(dest);
+    for (const n of [o, o2, vib]) {
+      n.start(t);
+      n.stop(t + 3.6);
+    }
+  }
+
   step(vol) {
     if (!this.ctx) return;
     const ctx = this.ctx, t = ctx.currentTime;

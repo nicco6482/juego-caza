@@ -72,9 +72,10 @@ let keySeq = 0;
 // al shader. Cada material recibe una clave propia para que three.js no mezcle programas.
 export function customize(material, name, fn) {
   const key = `${name}-${keySeq++}`;
-  material.onBeforeCompile = (sh, renderer) => {
+  material.onBeforeCompile = function (sh, renderer) {
     Object.assign(sh.uniforms, fogUniforms);
-    if (fn) fn(sh, renderer);
+    // `this` es el material que se compila (también en los clones).
+    if (fn) fn(sh, renderer, this);
   };
   material.customProgramCacheKey = () => key;
   return material;
