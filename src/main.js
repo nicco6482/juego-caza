@@ -6,6 +6,7 @@ import { Sfx } from './audio.js';
 import { MUZZLE, stepBullet, zeroAngle } from './ballistics.js';
 import { buildRifle } from './rifle.js';
 import { Hud } from './hud.js';
+import { createPost } from './post.js';
 
 // ---------- Ajustes ----------
 const HUNT_TIME = 600;
@@ -40,9 +41,18 @@ const settings = {
   bulletCam: store.get('sierra.bulletcam', true),
 };
 const QUALITY = {
-  alta: { shadows: true, shadowSize: 2048, grass: 14000, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.75) },
-  media: { shadows: true, shadowSize: 1024, grass: 6000, pixelRatio: 1 },
-  baja: { shadows: false, shadowSize: 512, grass: 0, pixelRatio: 0.8 },
+  alta: {
+    shadows: true, shadowSize: 4096, grass: 30000, grassRadius: 68, grassCell: 0.95, trees: 1, texSize: 512,
+    bloom: true, msaa: 4, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
+  },
+  media: {
+    shadows: true, shadowSize: 2048, grass: 14000, grassRadius: 55, grassCell: 1.15, trees: 0.8, texSize: 512,
+    bloom: true, msaa: 2, pixelRatio: 1,
+  },
+  baja: {
+    shadows: false, shadowSize: 512, grass: 3500, grassRadius: 38, grassCell: 1.5, trees: 0.55, texSize: 256,
+    bloom: false, msaa: 0, pixelRatio: 0.8,
+  },
 };
 const quality = QUALITY[settings.quality] || QUALITY.alta;
 
@@ -52,7 +62,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPrefere
 renderer.setPixelRatio(quality.pixelRatio);
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = quality.shadows;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 
@@ -63,7 +73,7 @@ scene.add(camera);
 
 const hud = new Hud();
 const sfx = new Sfx();
-let world, fauna, effects, rifle;
+let world, fauna, effects, rifle, post;
 
 const zeroAngles = ZEROS.map(zeroAngle);
 
@@ -162,7 +172,8 @@ function makeBulletMesh() {
 
 // ---------- Arranque ----------
 function boot() {
-  world = new World(scene, quality);
+  world = new World(scene, quality, renderer);
+  post = createPost(renderer, scene, camera, quality);
   effects = new Effects(scene);
   fauna = new Fauna(scene, {
     onBleed: (a) => effects.bloodDrop(a.pos.x, a.pos.z, a.speed > 3 ? 1 : 1.6),
@@ -220,7 +231,7 @@ function newHunt() {
   hud.setStance('stand');
   refreshAmmo();
   hud.feed('Temporada abierta: ciervo, corzo, jabalí y zorro. La cierva está protegida.');
-  hud.tip('Clic derecho: visor · B: prismáticos · Mira el viento antes de acercarte', 6);
+  hud.tip('Clic derecho o F: visor · B: prismáticos · Mira el viento antes de acercarte', 6);
 }
 
 function startHunt() {
@@ -336,6 +347,10 @@ addEventListener('keydown', (e) => {
     case 'KeyR':
       reload();
       break;
+    case 'Enter':
+    case 'NumpadEnter':
+      fire();
+      break;
     case 'KeyB':
       player.binoc = !player.binoc;
       if (player.binoc) {
@@ -380,12 +395,24 @@ addEventListener('mousedown', (e) => {
   }
   if (e.button === 0) fire();
   if (e.button === 2) {
-    player.aiming = true;
+    // Clic corto (p. ej. dos dedos en el trackpad) deja el visor fijo; mantenido, se quita al soltar.
+    if (player.aimToggle) {
+      player.aimToggle = false;
+      player.aiming = false;
+      aimPressAt = -1;
+    } else {
+      player.aiming = true;
+      aimPressAt = performance.now();
+    }
     player.binoc = false;
   }
 });
+let aimPressAt = -1;
 addEventListener('mouseup', (e) => {
-  if (e.button === 2) player.aiming = false;
+  if (e.button !== 2) return;
+  if (aimPressAt >= 0 && performance.now() - aimPressAt < 280) player.aimToggle = true;
+  player.aiming = false;
+  aimPressAt = -1;
 });
 addEventListener('mousemove', (e) => {
   if (game.state !== 'playing' || bulletCam.active) return;
@@ -1008,16 +1035,17 @@ function frame(now) {
   }
 
   effects.update(simDt);
-  world.update(realDt, camera, playing ? player.pos : camera.position);
+  world.update(realDt, camera, playing ? player.pos : camera.position, wind.speed);
   hud.update(realDt);
   sfx.update(wind.speed);
-  renderer.render(scene, camera);
+  post.render(realDt);
 }
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  if (post) post.setSize(innerWidth, innerHeight);
 });
 
 // ---------- Menús ----------

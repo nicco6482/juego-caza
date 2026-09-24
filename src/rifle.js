@@ -3,7 +3,7 @@ import * as THREE from 'three';
 
 export function buildRifle() {
   const wood = new THREE.MeshStandardMaterial({ color: '#7a4b2a', roughness: 0.5, metalness: 0.0 });
-  const metal = new THREE.MeshStandardMaterial({ color: '#3a3e44', roughness: 0.38, metalness: 0.35 });
+  const metal = new THREE.MeshStandardMaterial({ color: '#33373c', roughness: 0.55, metalness: 0.3 });
   const glass = new THREE.MeshStandardMaterial({ color: '#2a3d4a', roughness: 0.05, metalness: 0.9, emissive: '#0d1a22' });
 
   const g = new THREE.Group();

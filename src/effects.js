@@ -23,7 +23,7 @@ export class Effects {
     const map = puffTexture();
     this.particles = [];
     for (let i = 0; i < 120; i++) {
-      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map, transparent: true, depthWrite: false, fog: true }));
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map, transparent: true, depthWrite: false, fog: false }));
       s.visible = false;
       scene.add(s);
       this.particles.push({ s, vel: new THREE.Vector3(), life: 0, age: 0, s0: 1, s1: 1, a0: 1, grav: 0 });

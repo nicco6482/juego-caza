@@ -1,6 +1,11 @@
 // Fauna del coto: modelos, comportamiento (oído, vista, olfato), manadas y zonas de impacto.
 import * as THREE from 'three';
 import { part, between, merge, segmentSphere } from './geo.js';
+import { customize } from './fog.js';
+
+// Piezas con muy poca variación por cara: el detalle lo pone el shader de pelaje.
+const P = (g, c, pos, rot, sc) => part(g, c, pos, rot, sc, 0.012);
+const Bt = (a, b, r1, r2, c, radial = 8) => between(a, b, r1, r2, c, radial, 0.012);
 import { groundAt, forestAt, slopeAt, PLAY_HALF, clamp } from './world.js';
 
 export const SPECIES = {
@@ -45,7 +50,33 @@ const BUILDS = {
   fox: { L: 0.55, bl: 1.45, bh: 0.46, bw: 0.38, neckLen: 0.34, neckR: 0.11, hs: 0.18, snout: 0.3, rest: 0.75, graze: 1.9 },
 };
 
-const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.92 });
+// Pelaje: ruido anisótropo en coordenadas del modelo, así el grano viaja con el animal.
+const material = customize(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86 }), 'animal', (sh) => {
+  sh.vertexShader = 'varying vec3 vFurPos;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvFurPos = position;');
+  sh.fragmentShader = `varying vec3 vFurPos;
+    float fh(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+    float fn(vec3 x) {
+      vec3 i = floor(x), f = fract(x);
+      f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(mix(fh(i), fh(i + vec3(1, 0, 0)), f.x), mix(fh(i + vec3(0, 1, 0)), fh(i + vec3(1, 1, 0)), f.x), f.y),
+                 mix(mix(fh(i + vec3(0, 0, 1)), fh(i + vec3(1, 0, 1)), f.x), mix(fh(i + vec3(0, 1, 1)), fh(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+    }
+  ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+    float fur = fn(vFurPos * vec3(38.0, 38.0, 11.0)) * 0.6 + fn(vFurPos * vec3(130.0, 130.0, 34.0)) * 0.4;
+    diffuseColor.rgb *= 0.84 + 0.3 * fur;`);
+});
+
+// Lomo más oscuro que los costados, como en el pelaje real.
+function shadeDorsal(geo, by, bh) {
+  const p = geo.attributes.position, c = geo.attributes.color;
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i);
+    const t = Math.min(1, Math.max(0, (y - by) / (bh * 0.5)));
+    const k = 1 - 0.22 * t * t;
+    c.setXYZ(i, c.getX(i) * k, c.getY(i) * k, c.getZ(i) * k);
+  }
+  return geo;
+}
 const geoCache = new Map();
 
 function buildGeometry(key) {
@@ -56,31 +87,31 @@ function buildGeometry(key) {
   const { L, bl, bh, bw, neckLen, neckR, hs, snout } = b;
   const by = L + bh * 0.28;
   const S = (w, h, d) => [w, h, d];
-  const sphere = new THREE.SphereGeometry(1, 12, 9);
+  const sphere = new THREE.SphereGeometry(1, 18, 14);
   const ico = new THREE.IcosahedronGeometry(1, 1);
 
   // --- Tronco ---
   const torso = [
-    part(sphere, c.body, [0, by, 0], [0, 0, 0], S(bw / 2, bh / 2, bl / 2)),
-    part(sphere, c.body, [0, by - 0.02, bl * 0.28], [0, 0, 0], S(bw * 0.52, bh * 0.56, bl * 0.3)),
-    part(sphere, c.body, [0, by + 0.02, -bl * 0.3], [0, 0, 0], S(bw * 0.5, bh * 0.52, bl * 0.28)),
-    part(sphere, c.light, [0, by - bh * 0.2, 0.02], [0, 0, 0], S(bw * 0.42, bh * 0.32, bl * 0.4)),
+    P(sphere, c.body, [0, by, 0], [0, 0, 0], S(bw / 2, bh / 2, bl / 2)),
+    P(sphere, c.body, [0, by - 0.02, bl * 0.28], [0, 0, 0], S(bw * 0.52, bh * 0.56, bl * 0.3)),
+    P(sphere, c.body, [0, by + 0.02, -bl * 0.3], [0, 0, 0], S(bw * 0.5, bh * 0.52, bl * 0.28)),
+    P(sphere, c.light, [0, by - bh * 0.2, 0.02], [0, 0, 0], S(bw * 0.42, bh * 0.32, bl * 0.4)),
   ];
   if (sp.build === 'deer') {
-    torso.push(part(sphere, c.rump, [0, by + 0.04, -bl * 0.535], [0, 0, 0], S(bw * 0.27, bh * 0.3, 0.06)));
-    torso.push(part(new THREE.ConeGeometry(0.05, 0.16, 5), c.dark, [0, by + bh * 0.25, -bl * 0.57], [-2.4, 0, 0]));
+    torso.push(P(sphere, c.rump, [0, by + 0.04, -bl * 0.535], [0, 0, 0], S(bw * 0.27, bh * 0.3, 0.06)));
+    torso.push(P(new THREE.ConeGeometry(0.05, 0.16, 5), c.dark, [0, by + bh * 0.25, -bl * 0.57], [-2.4, 0, 0]));
   } else if (sp.build === 'boar') {
     // Crin erizada sobre el lomo y cuartos delanteros potentes.
-    torso.push(part(sphere, c.body, [0, by + 0.08, bl * 0.2], [0, 0, 0], S(bw * 0.55, bh * 0.62, bl * 0.34)));
+    torso.push(P(sphere, c.body, [0, by + 0.08, bl * 0.2], [0, 0, 0], S(bw * 0.55, bh * 0.62, bl * 0.34)));
     for (let i = 0; i < 7; i++) {
       const z = bl * (0.38 - i * 0.12);
-      torso.push(part(new THREE.ConeGeometry(0.06, 0.18, 4), c.dark, [0, by + bh * 0.5 - i * 0.012, z], [-0.5, 0, 0]));
+      torso.push(P(new THREE.ConeGeometry(0.06, 0.18, 4), c.dark, [0, by + bh * 0.5 - i * 0.012, z], [-0.5, 0, 0]));
     }
-    torso.push(between([0, by + 0.1, -bl * 0.52], [0, by - 0.2, -bl * 0.6], 0.03, 0.02, c.dark, 4));
+    torso.push(Bt([0, by + 0.1, -bl * 0.52], [0, by - 0.2, -bl * 0.6], 0.03, 0.02, c.dark, 4));
   } else if (sp.build === 'fox') {
-    torso.push(part(sphere, c.body, [0, by - 0.05, -bl * 0.85], [0.55, 0, 0], S(0.17, 0.17, 0.52)));
-    torso.push(part(sphere, c.light, [0, by - 0.33, -bl * 1.15], [0.55, 0, 0], S(0.11, 0.11, 0.16)));
-    torso.push(part(sphere, c.light, [0, by - 0.05, bl * 0.36], [0, 0, 0], S(bw * 0.4, bh * 0.42, bl * 0.14)));
+    torso.push(P(sphere, c.body, [0, by - 0.05, -bl * 0.85], [0.55, 0, 0], S(0.17, 0.17, 0.52)));
+    torso.push(P(sphere, c.light, [0, by - 0.33, -bl * 1.15], [0.55, 0, 0], S(0.11, 0.11, 0.16)));
+    torso.push(P(sphere, c.light, [0, by - 0.05, bl * 0.36], [0, 0, 0], S(bw * 0.4, bh * 0.42, bl * 0.14)));
   }
 
   // --- Cuello y cabeza (se mueven juntos al pastar o al mirar) ---
@@ -88,24 +119,24 @@ function buildGeometry(key) {
   const hm = new THREE.Matrix4().makeRotationX(headRot).setPosition(0, neckLen, 0);
   const H = (g) => { g.applyMatrix4(hm); return g; };
   const neck = [
-    between([0, -neckR * 0.8, 0], [0, neckLen + 0.02, 0], neckR, neckR * 0.72, c.body, 7),
-    H(part(sphere, c.body, [0, hs * 0.3, hs * 0.15], [0, 0, 0], S(hs * 0.85, hs * 0.9, hs * 1.15))),
-    H(between([0, hs * 0.15, hs * 0.6], [0, -hs * 0.08, hs * 0.6 + snout], hs * 0.56, hs * (sp.build === 'fox' ? 0.18 : 0.36), sp.build === 'boar' ? c.body : c.body, 7)),
-    H(part(sphere, c.nose, [0, -hs * 0.08, hs * 0.6 + snout], [0, 0, 0], S(hs * (sp.build === 'boar' ? 0.42 : 0.26), hs * (sp.build === 'boar' ? 0.36 : 0.2), hs * 0.12))),
-    H(part(sphere, '#0c0a08', [hs * 0.72, hs * 0.5, hs * 0.55], [0, 0, 0], S(0.03, 0.03, 0.03))),
-    H(part(sphere, '#0c0a08', [-hs * 0.72, hs * 0.5, hs * 0.55], [0, 0, 0], S(0.03, 0.03, 0.03))),
+    Bt([0, -neckR * 0.8, 0], [0, neckLen + 0.02, 0], neckR, neckR * 0.72, c.body, 7),
+    H(P(sphere, c.body, [0, hs * 0.3, hs * 0.15], [0, 0, 0], S(hs * 0.85, hs * 0.9, hs * 1.15))),
+    H(Bt([0, hs * 0.15, hs * 0.6], [0, -hs * 0.08, hs * 0.6 + snout], hs * 0.56, hs * (sp.build === 'fox' ? 0.18 : 0.36), sp.build === 'boar' ? c.body : c.body, 7)),
+    H(P(sphere, c.nose, [0, -hs * 0.08, hs * 0.6 + snout], [0, 0, 0], S(hs * (sp.build === 'boar' ? 0.42 : 0.26), hs * (sp.build === 'boar' ? 0.36 : 0.2), hs * 0.12))),
+    H(P(sphere, '#0c0a08', [hs * 0.72, hs * 0.5, hs * 0.55], [0, 0, 0], S(0.03, 0.03, 0.03))),
+    H(P(sphere, '#0c0a08', [-hs * 0.72, hs * 0.5, hs * 0.55], [0, 0, 0], S(0.03, 0.03, 0.03))),
   ];
   const earLen = sp.build === 'fox' ? hs * 1.2 : sp.build === 'boar' ? hs * 0.7 : hs * 1.25;
   for (const sx of [-1, 1]) {
-    neck.push(H(part(new THREE.ConeGeometry(hs * 0.28, earLen, 5), sp.build === 'fox' ? c.dark : c.body,
+    neck.push(H(P(new THREE.ConeGeometry(hs * 0.28, earLen, 5), sp.build === 'fox' ? c.dark : c.body,
       [sx * hs * 0.62, hs * 0.95 + earLen * 0.35, -hs * 0.15], [-0.25, 0, -sx * (sp.build === 'fox' ? 0.2 : 0.9)])));
   }
   if (sp.build === 'deer') {
-    neck.push(part(sphere, c.light, [0, neckLen * 0.35, neckR * 0.7], [0, 0, 0], S(neckR * 0.6, neckLen * 0.35, neckR * 0.4)));
+    neck.push(P(sphere, c.light, [0, neckLen * 0.35, neckR * 0.7], [0, 0, 0], S(neckR * 0.6, neckLen * 0.35, neckR * 0.4)));
   }
   if (sp.build === 'boar') {
     for (const sx of [-1, 1]) {
-      neck.push(H(part(new THREE.ConeGeometry(0.03, 0.14, 4), c.tusk, [sx * hs * 0.42, hs * 0.02, hs * 0.55 + snout * 0.75], [-0.4, 0, sx * 0.5])));
+      neck.push(H(P(new THREE.ConeGeometry(0.03, 0.14, 4), c.tusk, [sx * hs * 0.42, hs * 0.02, hs * 0.55 + snout * 0.75], [-0.4, 0, sx * 0.5])));
     }
   }
   if (sp.antlers === 'stag') {
@@ -114,21 +145,21 @@ function buildGeometry(key) {
       const p1 = [p0[0] + sx * 0.22, p0[1] + 0.42, -0.12];
       const p2 = [p1[0] + sx * 0.12, p1[1] + 0.38, -0.02];
       const p3 = [p2[0] - sx * 0.02, p2[1] + 0.26, 0.1];
-      neck.push(H(between(p0, p1, 0.04, 0.032, c.antler, 5)));
-      neck.push(H(between(p1, p2, 0.032, 0.025, c.antler, 5)));
-      neck.push(H(between(p2, p3, 0.025, 0.012, c.antler, 5)));
-      neck.push(H(between([p0[0], p0[1] + 0.06, p0[2]], [p0[0] + sx * 0.04, p0[1] + 0.12, 0.28], 0.025, 0.01, c.antler, 4)));
-      neck.push(H(between([p1[0], p1[1] - 0.12, p1[2]], [p1[0] + sx * 0.02, p1[1] + 0.02, 0.2], 0.022, 0.01, c.antler, 4)));
-      neck.push(H(between(p2, [p2[0] + sx * 0.1, p2[1] + 0.2, -0.12], 0.02, 0.008, c.antler, 4)));
-      neck.push(H(between(p2, [p2[0] - sx * 0.02, p2[1] + 0.22, 0.2], 0.02, 0.008, c.antler, 4)));
+      neck.push(H(Bt(p0, p1, 0.04, 0.032, c.antler, 5)));
+      neck.push(H(Bt(p1, p2, 0.032, 0.025, c.antler, 5)));
+      neck.push(H(Bt(p2, p3, 0.025, 0.012, c.antler, 5)));
+      neck.push(H(Bt([p0[0], p0[1] + 0.06, p0[2]], [p0[0] + sx * 0.04, p0[1] + 0.12, 0.28], 0.025, 0.01, c.antler, 4)));
+      neck.push(H(Bt([p1[0], p1[1] - 0.12, p1[2]], [p1[0] + sx * 0.02, p1[1] + 0.02, 0.2], 0.022, 0.01, c.antler, 4)));
+      neck.push(H(Bt(p2, [p2[0] + sx * 0.1, p2[1] + 0.2, -0.12], 0.02, 0.008, c.antler, 4)));
+      neck.push(H(Bt(p2, [p2[0] - sx * 0.02, p2[1] + 0.22, 0.2], 0.02, 0.008, c.antler, 4)));
     }
   } else if (sp.antlers === 'roe') {
     for (const sx of [-1, 1]) {
       const p0 = [sx * hs * 0.35, hs * 1.05, 0];
       const p1 = [p0[0] + sx * 0.03, p0[1] + 0.3, -0.03];
-      neck.push(H(between(p0, p1, 0.035, 0.015, c.antler, 5)));
-      neck.push(H(between([p0[0], p0[1] + 0.16, 0], [p0[0] + sx * 0.02, p0[1] + 0.24, 0.1], 0.018, 0.007, c.antler, 4)));
-      neck.push(H(between([p0[0], p0[1] + 0.2, 0], [p0[0] + sx * 0.02, p0[1] + 0.27, -0.1], 0.018, 0.007, c.antler, 4)));
+      neck.push(H(Bt(p0, p1, 0.035, 0.015, c.antler, 5)));
+      neck.push(H(Bt([p0[0], p0[1] + 0.16, 0], [p0[0] + sx * 0.02, p0[1] + 0.24, 0.1], 0.018, 0.007, c.antler, 4)));
+      neck.push(H(Bt([p0[0], p0[1] + 0.2, 0], [p0[0] + sx * 0.02, p0[1] + 0.27, -0.1], 0.018, 0.007, c.antler, 4)));
     }
   }
 
@@ -137,16 +168,16 @@ function buildGeometry(key) {
   const makeLeg = (hind) => {
     const knee = hind ? [0, -L * 0.45, -0.09] : [0, -L * 0.5, 0.03];
     const g = [
-      between([0, 0.08, 0], knee, legR * (hind ? 1.9 : 1.5), legR, hind ? c.body : c.body, 6),
-      between(knee, [0, -L + 0.05, 0], legR * 0.8, legR * 0.62, sp.build === 'fox' ? c.dark : c.body, 5),
-      part(new THREE.CylinderGeometry(legR * 0.7, legR * 0.9, 0.07, 5), c.dark, [0, -L + 0.035, 0.01]),
+      Bt([0, 0.08, 0], knee, legR * (hind ? 1.9 : 1.5), legR, hind ? c.body : c.body, 6),
+      Bt(knee, [0, -L + 0.05, 0], legR * 0.8, legR * 0.62, sp.build === 'fox' ? c.dark : c.body, 5),
+      P(new THREE.CylinderGeometry(legR * 0.7, legR * 0.9, 0.07, 5), c.dark, [0, -L + 0.035, 0.01]),
     ];
     return merge(g);
   };
 
   const result = {
     b, by,
-    torso: merge(torso),
+    torso: shadeDorsal(merge(torso), by, bh),
     neck: merge(neck),
     front: makeLeg(false),
     hind: makeLeg(true),
