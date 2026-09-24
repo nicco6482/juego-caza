@@ -92,16 +92,16 @@ export class Sfx {
     return g;
   }
 
-  shot() {
+  shot(shotgun = false) {
     if (!this.ctx) return;
     const ctx = this.ctx, t = ctx.currentTime;
-    const dest = this.out(0, 1, 1.6);
+    const dest = this.out(0, shotgun ? 0.85 : 1, shotgun ? 1.2 : 1.6);
     // Estallido
     const n = this.noiseSrc();
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(6000, t);
-    lp.frequency.exponentialRampToValueAtTime(300, t + 0.35);
+    lp.frequency.setValueAtTime(shotgun ? 8000 : 6000, t);
+    lp.frequency.exponentialRampToValueAtTime(shotgun ? 500 : 300, t + (shotgun ? 0.25 : 0.35));
     const g = ctx.createGain();
     this.env(g, t, 0.002, 1.4, 0.45);
     n.connect(lp).connect(g).connect(dest);
@@ -314,6 +314,71 @@ export class Sfx {
     for (const n of [o, o2, vib]) {
       n.start(t);
       n.stop(t + 3.6);
+    }
+  }
+
+  // Zumbido de alas al arrancar un bando.
+  flush(dist, pan, big = false) {
+    if (!this.ctx || dist > 150) return;
+    const ctx = this.ctx, t = ctx.currentTime + dist / 343;
+    const vol = Math.min(0.5, 12 / (dist + 8));
+    const dest = this.out(pan, vol, 0.3);
+    const n = this.noiseSrc();
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = big ? 500 : 900;
+    bp.Q.value = 0.8;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    // Batir rápido: se modula el volumen con muchos golpes seguidos.
+    const beats = big ? 10 : 18;
+    for (let i = 0; i < beats; i++) {
+      const tt = t + i * (big ? 0.09 : 0.05);
+      g.gain.setValueAtTime(1 - i / beats, tt);
+      g.gain.exponentialRampToValueAtTime(0.05, tt + (big ? 0.07 : 0.035));
+    }
+    n.connect(bp).connect(g).connect(dest);
+    n.start(t, Math.random());
+    n.stop(t + beats * 0.1 + 0.1);
+  }
+
+  birdCall(kind, dist, pan) {
+    if (!this.ctx || dist > 260) return;
+    const ctx = this.ctx, t = ctx.currentTime + dist / 343;
+    const vol = Math.min(0.35, 25 / (dist + 20));
+    const dest = this.out(pan, vol, 0.5);
+    const note = (tt, f0, f1, len, type = 'sine', q = 0) => {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, tt);
+      o.frequency.exponentialRampToValueAtTime(f1, tt + len);
+      const g = ctx.createGain();
+      this.env(g, tt, 0.01, 1, len);
+      let node = o;
+      if (q) {
+        const f = ctx.createBiquadFilter();
+        f.type = 'bandpass';
+        f.frequency.value = f0 * 1.5;
+        f.Q.value = q;
+        node = o.connect(f);
+      }
+      node.connect(g).connect(dest);
+      o.start(tt);
+      o.stop(tt + len + 0.05);
+    };
+    if (kind === 'perdiz') {
+      // "Cha-chac, cha-chac..."
+      for (let i = 0; i < 4; i++) {
+        note(t + i * 0.32, 1300, 900, 0.07, 'sawtooth', 3);
+        note(t + i * 0.32 + 0.1, 1500, 1000, 0.12, 'sawtooth', 3);
+      }
+    } else if (kind === 'tortola') {
+      // Arrullo grave: "rrrr-rrrr".
+      for (let i = 0; i < 3; i++) note(t + i * 0.6, 520, 470, 0.45, 'sine');
+    } else if (kind === 'pato') {
+      for (let i = 0; i < 3; i++) note(t + i * 0.28, 420, 330, 0.18, 'sawtooth', 2);
+    } else if (kind === 'agachadiza') {
+      note(t, 2200, 1700, 0.12, 'square', 4);
     }
   }
 

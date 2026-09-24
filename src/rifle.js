@@ -180,3 +180,55 @@ export function buildRifle() {
   });
   return { group: g, bolt, muzzle, flash };
 }
+
+// Escopeta paralela de dos cañones, para caza menor.
+export function buildShotgun() {
+  const wood = new THREE.MeshPhysicalMaterial({ map: woodTexture(), roughness: 0.4, clearcoat: 0.6, clearcoatRoughness: 0.2 });
+  const blued = new THREE.MeshStandardMaterial({ color: '#1b1d20', roughness: 0.3, metalness: 0.85 });
+  const steel = new THREE.MeshStandardMaterial({ color: '#8d8a85', roughness: 0.35, metalness: 0.9 });
+  const g = new THREE.Group();
+  const add = (geo, mat, pos = [0, 0, 0], rot = [0, 0, 0]) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(...pos);
+    m.rotation.set(...rot);
+    g.add(m);
+    return m;
+  };
+  const white = () => [1, 1, 1];
+  // Culata inglesa, recta.
+  const stock = subdivide([
+    [0.6, -0.07, 0.02, 0.065], [0.56, -0.066, 0.022, 0.068], [0.4, -0.05, 0.02, 0.055], [0.24, -0.035, 0.017, 0.04],
+    [0.14, -0.03, 0.016, 0.034], [0.08, -0.022, 0.02, 0.03], [0.07, -0.02, 0.012, 0.012],
+  ].map(([z, y, w, h]) => ({ p: [0, y, z], w, h })), 4);
+  add(loft(stock, [0, 1, 0], 26, white, 2.6, [1, 1.3]), wood);
+  add(new THREE.BoxGeometry(0.04, 0.13, 0.012), blued, [0, -0.07, 0.606]);
+  // Báscula (acero grabado) y guardamanos.
+  add(new THREE.BoxGeometry(0.046, 0.05, 0.1), steel, [0, -0.005, 0.02]);
+  add(new THREE.BoxGeometry(0.04, 0.03, 0.2), wood, [0, -0.012, -0.2]);
+  // Dos cañones y la banda con el punto de mira.
+  for (const sx of [-1, 1]) {
+    add(lathe([[0, 0], [0.0112, 0], [0.011, 0.3], [0.0098, 0.66], [0.0098, 0.67], [0, 0.67]], 24), blued, [sx * 0.0112, 0.012, -0.03], [Math.PI, 0, 0]);
+  }
+  add(new THREE.BoxGeometry(0.008, 0.004, 0.64), blued, [0, 0.024, -0.36]);
+  add(new THREE.SphereGeometry(0.0028, 10, 8), steel, [0, 0.029, -0.69]);
+  // Gatillos y guarda.
+  add(new THREE.TorusGeometry(0.024, 0.0032, 8, 24, Math.PI), blued, [0, -0.034, 0.05], [0, Math.PI / 2, Math.PI]);
+  add(new THREE.TorusGeometry(0.011, 0.0028, 8, 14, Math.PI * 0.6), blued, [0, -0.03, 0.05], [0, Math.PI / 2, Math.PI * 0.95]);
+  add(new THREE.TorusGeometry(0.011, 0.0028, 8, 14, Math.PI * 0.6), blued, [0, -0.03, 0.068], [0, Math.PI / 2, Math.PI * 0.95]);
+  const muzzle = new THREE.Object3D();
+  muzzle.position.set(0, 0.012, -0.7);
+  g.add(muzzle);
+  const flash = new THREE.PointLight('#ffb35c', 0, 6, 2);
+  flash.position.copy(muzzle.position);
+  g.add(flash);
+  // El código de animación espera un "cerrojo"; en la paralela no se mueve nada.
+  const bolt = new THREE.Group();
+  g.add(bolt);
+  g.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = false;
+      o.receiveShadow = false;
+    }
+  });
+  return { group: g, bolt, muzzle, flash };
+}

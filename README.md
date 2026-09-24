@@ -9,6 +9,7 @@ Abre `index.html` con un servidor local (`python3 -m http.server`) y entra en `h
 - Balística con caída de la bala, rozamiento y deriva por viento, alza de 100 a 400 m y retícula mil-dot.
 - Animales que te oyen, te ven y te huelen según el viento: ciervo, gamo, corzo, jabalí, muflón, cabra montés, zorro y liebre; la cierva y el lobo ibérico están protegidos.
 - Zonas de impacto (corazón, pulmones, cabeza, cuello, cuerpo), rastro de sangre y cámara de bala.
+- Caza menor con escopeta paralela (tecla 2): perdiz roja, tórtola, zorzal, agachadiza y ánade real en el lago.
 
 ## Gráficos
 

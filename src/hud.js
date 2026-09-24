@@ -62,12 +62,16 @@ export class Hud {
     this.el.windSpeed.textContent = `${speed.toFixed(1)} m/s`;
   }
 
-  setAmmo(mag, reserve, state) {
+  setAmmo(mag, reserve, state, size = 5, weapon = 'Rifle') {
+    const key = `${mag}|${reserve}|${state}|${size}|${weapon}`;
+    if (key === this._ammoKey) return;
+    this._ammoKey = key;
     let html = '';
-    for (let i = 0; i < 5; i++) html += `<i class="${i < mag ? 'full' : ''}"></i>`;
+    const shell = weapon !== 'Rifle';
+    for (let i = 0; i < size; i++) html += `<i class="${i < mag ? 'full' : ''}${shell ? ' shell' : ''}"></i>`;
     this.el.mag.innerHTML = html;
     this.el.reserve.textContent = reserve;
-    this.el.ammoState.textContent = state;
+    this.el.ammoState.textContent = state || weapon;
   }
 
   setStance(stance) {

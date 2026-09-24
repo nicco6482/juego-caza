@@ -307,6 +307,8 @@ html, body {
   background: rgba(255, 255, 255, 0.12);
 }
 #ammo-mag i.full { background: linear-gradient(#e5b879 0 30%, #c79a53 30%); }
+#ammo-mag i.shell { width: 12px; border-radius: 2px; }
+#ammo-mag i.shell.full { background: linear-gradient(#b43a2c 0 72%, #c9a15a 72%); }
 .ammo-meta span { font-family: var(--display); font-size: 24px; }
 #ammo-state { grid-column: 1 / -1; font-size: 11px; color: var(--accent); min-height: 14px; margin-top: 4px; }
 
