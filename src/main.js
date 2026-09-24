@@ -8,6 +8,7 @@ import { MUZZLE, stepBullet, zeroAngle } from './ballistics.js';
 import { buildRifle, buildShotgun, buildOverUnder, buildSemiAuto, buildLever } from './rifle.js';
 import { DogPack } from './dogs.js';
 import { Birds } from './birds.js';
+import * as Trophies from './trophies.js';
 import { Hud } from './hud.js';
 import { createPost } from './post.js';
 import { loadModels } from './models.js';
@@ -342,7 +343,7 @@ function lockPointer() {
 }
 
 function showScreen(id) {
-  for (const s of ['menu', 'pause', 'results', 'help']) {
+  for (const s of ['menu', 'pause', 'results', 'help', 'trophies']) {
     document.getElementById(s).classList.toggle('hidden', s !== id);
   }
 }
@@ -851,6 +852,17 @@ function countHit(shot) {
   game.hits++;
 }
 
+// Ficha de trofeo que aparece al abatir una pieza.
+let toastT = 0;
+function showTrophy(e) {
+  const el = document.getElementById('trophy-toast');
+  el.innerHTML = `<small>Nueva pieza en tu sala de trofeos</small><b>${e.name}</b><span>${Trophies.describe(e)}</span>` +
+    (e.medal ? `<div class="t-medal m-${e.medal}">${Trophies.MEDALS[e.medal]}</div>` : '');
+  el.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => el.classList.remove('show'), 4500);
+}
+
 function onBirdHit(bird, dist, b) {
   const sp = bird.sp;
   countHit(b.shot);
@@ -862,6 +874,7 @@ function onBirdHit(bird, dist, b) {
   game.log.push({ name: sp.name, note: b.pellet ? note : `${note} · rifle`, dist, pts });
   hud.setScore(game.score);
   hud.feed(`${sp.name} · ${note.toLowerCase()} · ${Math.round(dist)} m · +${pts}`, 'good');
+  showTrophy(Trophies.record({ key: bird.key, name: sp.name, size: bird.scale, dist, weapon: WEAPONS[game.weapon].name, flying, zone: b.pellet ? '' : 'Con bala' }));
   if (!b.pellet) hud.banner(`${sp.name.toUpperCase()} CON RIFLE`, `¡Qué puntería! · +${pts}`, 'good');
 }
 
@@ -885,6 +898,7 @@ function onAnimalHit(animal, zone, dist, res, shot) {
   if (!sp.legal) {
     game.score -= sp.penalty;
     game.log.push({ name: sp.name, note: 'Protegida', dist, pts: -sp.penalty });
+    Trophies.record({ key: animal.key, name: sp.name, size: animal.scale / sp.scale, cls: animal.cls, dist, zone: 'Especie protegida', weapon: WEAPONS[game.weapon].name, penalty: true });
     hud.banner(`¡${sp.name.toUpperCase()} ${sp.fem ? 'PROTEGIDA' : 'PROTEGIDO'}!`, `Sanción de la guardería · −${sp.penalty}`, 'bad');
     hud.feed(`Has abatido ${sp.fem ? 'una' : 'un'} ${sp.name.toLowerCase()}: −${sp.penalty}`, 'bad');
   } else {
@@ -898,6 +912,8 @@ function onAnimalHit(animal, zone, dist, res, shot) {
     game.score += pts;
     game.longest = Math.max(game.longest, dist);
     game.log.push({ name: sp.name, note, dist, pts });
+    const trophy = Trophies.record({ key: animal.key, name: sp.name, size: animal.scale / sp.scale, cls: animal.cls, dist, zone: note, weapon: WEAPONS[game.weapon].name });
+    showTrophy(trophy);
     hud.banner(`${sp.name.toUpperCase()} ${sp.fem ? 'ABATIDA' : 'ABATIDO'}`, `${note} · ${Math.round(dist)} m · +${pts}`, 'good');
     hud.feed(`${sp.name} · ${note} · ${Math.round(dist)} m · +${pts}`, 'good');
   }
@@ -916,6 +932,7 @@ function onBledOut(animal) {
     const pts = Math.round(sp.points * 0.4 + (animal.woundDist || 0) * 0.3);
     game.score += pts;
     game.log.push({ name: sp.name, note: 'Rastreo', dist: animal.woundDist || 0, pts });
+    showTrophy(Trophies.record({ key: animal.key, name: sp.name, size: animal.scale / sp.scale, cls: animal.cls, dist: animal.woundDist || 0, zone: 'Rastreo', weapon: WEAPONS[game.weapon].name }));
     hud.feed(`${sp.fem ? 'La' : 'El'} ${sp.name.toLowerCase()} ${sp.fem ? 'herida' : 'herido'} ha caído · rastreo · +${pts}`, 'warn');
   }
   hud.setScore(game.score);
@@ -1357,6 +1374,22 @@ addEventListener('resize', () => {
 
 // ---------- Menús ----------
 document.getElementById('btn-start').addEventListener('click', startHunt);
+let trophiesBack = 'menu';
+const openTrophies = (from) => {
+  trophiesBack = from;
+  Trophies.renderCatalog(document.getElementById('trophies'));
+  showScreen('trophies');
+};
+document.getElementById('btn-trophies').addEventListener('click', () => openTrophies('menu'));
+document.getElementById('btn-pause-trophies').addEventListener('click', () => openTrophies('pause'));
+document.getElementById('btn-res-trophies').addEventListener('click', () => openTrophies('results'));
+document.getElementById('btn-trophies-back').addEventListener('click', () => showScreen(trophiesBack));
+document.getElementById('btn-trophies-clear').addEventListener('click', () => {
+  if (confirm('¿Seguro que quieres borrar todos tus trofeos? No se puede deshacer.')) {
+    Trophies.clearAll();
+    Trophies.renderCatalog(document.getElementById('trophies'));
+  }
+});
 document.getElementById('btn-help').addEventListener('click', () => showScreen('help'));
 document.getElementById('btn-help-back').addEventListener('click', () => showScreen(game.state === 'paused' ? 'pause' : 'menu'));
 document.getElementById('btn-resume').addEventListener('click', resume);

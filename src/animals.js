@@ -1056,7 +1056,7 @@ export class Fauna {
   spawnInitial(px, pz, lake) {
     if (lake) this.spawnLakeHerds(lake);
     const plan = {
-      ciervos: 8, gamos: 4, corzos: 8, jabalies: 5, muflones: 3, cabras: 3, zorro: 4, lobos: 2, liebre: 6,
+      ciervos: 12, gamos: 7, corzos: 12, jabalies: 8, muflones: 5, cabras: 5, zorro: 6, lobos: 2, liebre: 10,
     };
     for (const [t, n] of Object.entries(plan)) {
       // La mayoría cerca del puesto (se distinguen a simple vista); el resto, más lejos.
@@ -1086,9 +1086,9 @@ export class Fauna {
     }
     this.respawnTimer -= dt;
     if (this.respawnTimer <= 0) {
-      this.respawnTimer = 20;
+      this.respawnTimer = 14;
       const legalAlive = this.animals.filter((a) => a.alive && a.sp.legal).length;
-      if (legalAlive < 55) {
+      if (legalAlive < 90) {
         const types = ['ciervos', 'ciervos', 'gamos', 'corzos', 'corzos', 'jabalies', 'muflones', 'cabras', 'zorro', 'liebre'];
         this.spawnHerd(types[Math.floor(Math.random() * types.length)], ctx.player.x, ctx.player.z, 120, 300);
       }

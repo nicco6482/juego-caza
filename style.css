@@ -47,7 +47,7 @@ html, body {
 #optic-info {
   position: fixed;
   left: 50%;
-  bottom: 3.2vh;
+  bottom: 104px;
   transform: translateX(-50%);
   text-align: center;
   pointer-events: none;
@@ -513,3 +513,51 @@ button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-v
 #weapons div.on { color: #1c140a; background: var(--accent); border-color: transparent; }
 #weapons div.on b { color: #1c140a; }
 @media (max-width: 720px) { #weapons div { font-size: 10px; padding: 4px 6px; } }
+
+/* ---------- Trofeos ---------- */
+.trophy-room { max-width: 900px; }
+.t-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.t-tabs button { padding: 7px 12px; font-size: 13px; }
+.t-tabs button small { color: var(--ink-dim); margin-left: 4px; }
+.t-tabs button.on { background: var(--accent); color: #1c140a; }
+.t-tabs button.on small { color: #3a2a14; }
+.t-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.t-species { background: rgba(255, 255, 255, 0.05); border-radius: 10px; padding: 8px 10px; font-size: 13px; }
+.t-species b { display: block; font-family: var(--display); font-weight: 400; font-size: 15px; }
+.t-species span { color: var(--ink-dim); }
+.t-species em { display: block; font-style: normal; font-size: 12px; margin-top: 2px; }
+.t-list { list-style: none; margin: 0 0 16px; padding: 0; max-height: 44vh; overflow-y: auto; }
+.t-card { display: grid; grid-template-columns: 74px 1fr auto; gap: 12px; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--line); }
+.t-card.bad { opacity: 0.75; }
+.t-main b { display: block; font-family: var(--display); font-weight: 400; font-size: 17px; letter-spacing: 0.02em; }
+.t-main span { display: block; font-size: 14px; }
+.t-main small { color: var(--ink-dim); font-size: 12px; }
+.t-card time { font-size: 11px; color: var(--ink-dim); text-align: right; }
+.t-medal { text-align: center; font: 600 12px var(--body); letter-spacing: 0.06em; text-transform: uppercase; padding: 8px 4px; border-radius: 8px; background: rgba(255, 255, 255, 0.06); color: var(--ink-dim); }
+.m-oro { background: linear-gradient(135deg, #f7d774, #b8860b); color: #2a1d02; }
+.m-plata { background: linear-gradient(135deg, #f1f1f1, #9aa1a8); color: #1d2024; }
+.m-bronce { background: linear-gradient(135deg, #e3a36b, #8c5a2b); color: #25160a; }
+.t-species em.m-oro, .t-species em.m-plata, .t-species em.m-bronce { background: none; }
+.t-species em.m-oro { color: #f7d774; }
+.t-species em.m-plata { color: #d9dde1; }
+.t-species em.m-bronce { color: #e3a36b; }
+.t-empty { color: var(--ink-dim); padding: 16px 4px; }
+
+#trophy-toast {
+  position: absolute;
+  right: 16px;
+  top: 210px;
+  width: 250px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(20, 18, 14, 0.85);
+  border: 1px solid var(--line);
+  transform: translateX(120%);
+  transition: transform 0.4s ease;
+}
+#trophy-toast.show { transform: translateX(0); }
+#trophy-toast small { display: block; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); }
+#trophy-toast b { display: block; font-family: var(--display); font-weight: 400; font-size: 20px; margin: 2px 0; }
+#trophy-toast span { display: block; font-size: 13px; }
+#trophy-toast .t-medal { display: inline-block; margin-top: 8px; padding: 4px 10px; }
+@media (max-width: 720px) { .t-card { grid-template-columns: 60px 1fr; } .t-card time { display: none; } }

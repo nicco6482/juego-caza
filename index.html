@@ -49,6 +49,7 @@
     <div id="feed"></div>
     <div id="weapons"></div>
     <div id="banner"></div>
+    <div id="trophy-toast"></div>
     <div id="tip"></div>
 
     <div id="bottom-left" class="panel">
@@ -77,6 +78,7 @@
       <div class="menu-actions">
         <button id="btn-start" class="primary">Empezar cacería</button>
         <button id="btn-help">Cómo se juega</button>
+        <button id="btn-trophies">Trofeos</button>
       </div>
       <p id="menu-best"></p>
       <details class="options">
@@ -137,12 +139,27 @@
     </div>
   </div>
 
+  <div id="trophies" class="screen hidden">
+    <div class="menu-card wide trophy-room">
+      <p class="eyebrow">Tu sala de trofeos</p>
+      <h2>Trofeos</h2>
+      <div class="t-tabs"></div>
+      <div class="t-summary"></div>
+      <ul class="t-list"></ul>
+      <div class="menu-actions">
+        <button id="btn-trophies-back" class="primary">Volver</button>
+        <button id="btn-trophies-clear">Borrar catálogo</button>
+      </div>
+    </div>
+  </div>
+
   <div id="pause" class="screen hidden">
     <div class="menu-card">
       <h2>Pausa</h2>
       <div class="menu-actions column">
         <button id="btn-resume" class="primary">Continuar</button>
         <button id="btn-pause-help">Controles</button>
+        <button id="btn-pause-trophies">Trofeos</button>
         <button id="btn-quit">Terminar cacería</button>
       </div>
     </div>
@@ -158,6 +175,7 @@
       <ul id="res-log"></ul>
       <div class="menu-actions">
         <button id="btn-again" class="primary">Otra cacería</button>
+        <button id="btn-res-trophies">Ver trofeos</button>
         <button id="btn-menu">Menú</button>
       </div>
     </div>

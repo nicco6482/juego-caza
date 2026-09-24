@@ -152,7 +152,7 @@ function buildBird(key) {
   return { body, wingL: makeWing(1), wingR: makeWing(-1), half };
 }
 
-const MAX = 140;
+const MAX = 200;
 const _m = new THREE.Matrix4();
 const _w = new THREE.Matrix4();
 const _t = new THREE.Matrix4();
@@ -283,7 +283,7 @@ export class Birds {
 
   populate(px, pz) {
     this.clear();
-    const plan = { perdiz: 7, tortola: 6, zorzal: 4, agachadiza: 6, pato: 3 };
+    const plan = { perdiz: 11, tortola: 9, zorzal: 6, agachadiza: 8, pato: 5 };
     for (const [k, n] of Object.entries(plan)) for (let i = 0; i < n; i++) this.spawnFlock(k, px, pz, 50, 320);
   }
 
