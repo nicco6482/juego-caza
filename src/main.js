@@ -178,6 +178,10 @@ function boot() {
   fauna = new Fauna(scene, {
     onBleed: (a) => effects.bloodDrop(a.pos.x, a.pos.z, a.speed > 3 ? 1 : 1.6),
     onBledOut: onBledOut,
+    onRoar: (a) => {
+      if (game.state !== 'playing') return;
+      sfx.roar(a.distToPlayer, Math.sin(relativeBearing(a.pos)));
+    },
     onAlarm: (a) => {
       if (game.state !== 'playing') return;
       const rel = relativeBearing(a.pos);
@@ -231,6 +235,7 @@ function newHunt() {
   hud.setStance('stand');
   refreshAmmo();
   hud.feed('Temporada abierta: ciervo, corzo, jabalí y zorro. La cierva está protegida.');
+  hud.feed('Es época de berrea: escucha a los ciervos para saber dónde están.');
   hud.tip('Clic derecho o F: visor · B: prismáticos · Mira el viento antes de acercarte', 6);
 }
 
@@ -924,9 +929,9 @@ function updateMarkers() {
   for (const a of fauna.animals) {
     const d = a.pos.distanceTo(player.pos);
     // Avistar con los prismáticos: basta con mirar al animal un momento.
-    if (player.binoc && a.alive && d < 750) {
+    if (player.binoc && a.alive && d < 800) {
       _proj.set(a.pos.x, a.pos.y + 0.9 * a.scale, a.pos.z).sub(camera.position).normalize();
-      if (_proj.dot(lookDir) > Math.cos(THREE.MathUtils.degToRad(2.2))) {
+      if (_proj.dot(lookDir) > Math.cos(THREE.MathUtils.degToRad(4.5))) {
         if (a.spottedUntil < now) hud.feed(`Avistado: ${a.sp.name.toLowerCase()} a ${Math.round(d)} m${a.sp.legal ? '' : ' (protegida)'}`, a.sp.legal ? '' : 'bad');
         a.spottedUntil = now + 45;
       }

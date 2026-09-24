@@ -434,6 +434,15 @@ export class Animal {
       }
     }
 
+    // Berrea: los machos de ciervo braman de vez en cuando si están tranquilos.
+    if (this.sp.antlers === 'stag' && this.state !== 'flee' && this.onRoar) {
+      this.roarT = (this.roarT ?? 8 + Math.random() * 40) - dt;
+      if (this.roarT <= 0) {
+        this.roarT = 25 + Math.random() * 45;
+        this.onRoar(this);
+      }
+    }
+
     // --- Comportamiento ---
     let neckTarget = b.rest;
     let yawTarget = 0;
@@ -712,6 +721,7 @@ export class Fauna {
       an.onBleed = this.hooks.onBleed;
       an.onBledOut = this.hooks.onBledOut;
       an.onAlarm = this.hooks.onAlarm;
+      an.onRoar = this.hooks.onRoar;
       herd.members.push(an);
       this.animals.push(an);
     }
@@ -720,10 +730,14 @@ export class Fauna {
 
   spawnInitial(px, pz) {
     const plan = {
-      ciervos: 8, corzos: 8, jabalies: 6, zorro: 5,
+      ciervos: 12, corzos: 12, jabalies: 8, zorro: 6,
     };
     for (const [t, n] of Object.entries(plan)) {
-      for (let i = 0; i < n; i++) this.spawnHerd(t, px, pz, i < n / 2 ? 70 : 150, i < n / 2 ? 220 : 360);
+      // La mayoría cerca del puesto (se distinguen a simple vista); el resto, más lejos.
+      for (let i = 0; i < n; i++) {
+        const near = i < n * 0.65;
+        this.spawnHerd(t, px, pz, near ? 45 : 150, near ? 200 : 360);
+      }
     }
   }
 
@@ -734,7 +748,7 @@ export class Fauna {
       // Lejos no se dibujan (la niebla ya los tapa) y a media distancia no proyectan sombra.
       if (viewer) {
         const d = Math.hypot(a.pos.x - viewer.x, a.pos.z - viewer.z);
-        a.group.visible = d < 560;
+        a.group.visible = d < 500;
         const cast = d < 150;
         if (cast !== a.castsShadow) {
           a.castsShadow = cast;
@@ -746,11 +760,11 @@ export class Fauna {
     }
     this.respawnTimer -= dt;
     if (this.respawnTimer <= 0) {
-      this.respawnTimer = 25;
+      this.respawnTimer = 20;
       const legalAlive = this.animals.filter((a) => a.alive && a.sp.legal).length;
-      if (legalAlive < 40) {
+      if (legalAlive < 60) {
         const types = ['ciervos', 'ciervos', 'corzos', 'corzos', 'jabalies', 'zorro'];
-        this.spawnHerd(types[Math.floor(Math.random() * types.length)], ctx.player.x, ctx.player.z, 160, 340);
+        this.spawnHerd(types[Math.floor(Math.random() * types.length)], ctx.player.x, ctx.player.z, 120, 300);
       }
     }
   }

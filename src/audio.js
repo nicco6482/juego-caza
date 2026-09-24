@@ -232,6 +232,54 @@ export class Sfx {
     }
   }
 
+  // Bramido de ciervo en celo: gruñido grave y largo, con eco en el valle.
+  roar(dist, pan) {
+    if (!this.ctx || dist > 900) return;
+    const ctx = this.ctx, t = ctx.currentTime + dist / 343;
+    const vol = Math.min(0.6, 60 / (dist + 40));
+    const dest = this.out(pan, vol, 0.9);
+    const groans = 1 + Math.floor(Math.random() * 3);
+    let tt = t;
+    for (let i = 0; i < groans; i++) {
+      const len = 1.1 + Math.random() * 0.9;
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      const f0 = 95 + Math.random() * 25;
+      o.frequency.setValueAtTime(f0 * 0.85, tt);
+      o.frequency.linearRampToValueAtTime(f0 * 1.25, tt + len * 0.35);
+      o.frequency.linearRampToValueAtTime(f0 * 0.7, tt + len);
+      const vib = ctx.createOscillator();
+      vib.frequency.value = 7 + Math.random() * 3;
+      const vibG = ctx.createGain();
+      vibG.gain.value = 6;
+      vib.connect(vibG).connect(o.frequency);
+      // Dos formantes: suena a garganta, no a sirena.
+      const f1 = ctx.createBiquadFilter();
+      f1.type = 'bandpass';
+      f1.frequency.value = 420;
+      f1.Q.value = 2.5;
+      const f2 = ctx.createBiquadFilter();
+      f2.type = 'bandpass';
+      f2.frequency.value = 1100;
+      f2.Q.value = 3;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, tt);
+      g.gain.exponentialRampToValueAtTime(1.2, tt + 0.25);
+      g.gain.setValueAtTime(1.2, tt + len * 0.7);
+      g.gain.exponentialRampToValueAtTime(0.0001, tt + len);
+      const g2 = ctx.createGain();
+      g2.gain.value = 0.5;
+      o.connect(f1).connect(g);
+      o.connect(f2).connect(g2).connect(g);
+      g.connect(dest);
+      o.start(tt);
+      vib.start(tt);
+      o.stop(tt + len + 0.05);
+      vib.stop(tt + len + 0.05);
+      tt += len + 0.35 + Math.random() * 0.4;
+    }
+  }
+
   step(vol) {
     if (!this.ctx) return;
     const ctx = this.ctx, t = ctx.currentTime;

@@ -847,7 +847,7 @@ export class World {
         if (slopeAt(x, z) > 0.3) continue;
         const r4 = hash2(cx, cz, 4);
         const fadeOut = smoothstep(R, R - 16, d);
-        const h = (0.4 + r4 * 0.65) * fadeOut;
+        const h = (0.3 + r4 * 0.5) * fadeOut;
         if (h < 0.05) continue;
         const w = 0.8 + hash2(cx, cz, 5) * 0.7;
         dummy.position.set(x, groundAt(x, z) - 0.03, z);
