@@ -11,7 +11,8 @@ Abre `index.html` con un servidor local (`python3 -m http.server`) y entra en `h
 - Zonas de impacto (corazón, pulmones, cabeza, cuello, cuerpo), rastro de sangre y cámara de bala.
 - Cinco armas (teclas 1-5 o rueda del ratón): rifle de cerrojo con visor, rifle de palanca, escopeta paralela, superpuesta y semiautomática.
 - Caza menor: perdiz roja, tórtola, zorzal, agachadiza, ánade real, cigüeña y flamenco; cada pocos segundos entra un bando a tiro.
-- Búfalo cafre (puede embestir) y gorila (protegido), fuera de lo habitual en la sierra.
+- Fauna exótica fuera de lo habitual en la sierra: búfalo, elefante e hipopótamo (pueden embestir), cocodrilos en el lago y gorila (protegido).
+- Una leyenda en el lago: a veces asoma el monstruo…
 - Sala de trofeos: cada pieza queda catalogada con su peso, puntos CIC y medalla de oro, plata o bronce.
 - Rehala: 2 bracos húngaros y 3 podencos que levantan y cobran las aves, y 2 teckels que siguen el rastro de las piezas heridas.
 

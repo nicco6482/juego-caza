@@ -21,14 +21,42 @@ export const smoothstep = (a, b, x) => {
   return t * t * (3 - 2 * t);
 };
 
+const nM = createNoise2D(59);
+// Macizo montañoso dentro del coto: crestas afiladas (ruido "ridged") con picos de más de 100 m.
+const MASSIFS = [
+  { x: -190, z: 190, r: 175, h: 135 },
+  { x: 230, z: 170, r: 120, h: 90 },
+  { x: -230, z: -150, r: 110, h: 80 },
+];
+function massif(x, z) {
+  let h = 0;
+  for (const m of MASSIFS) {
+    const d = Math.hypot(x - m.x, z - m.z);
+    if (d > m.r * 1.3) continue;
+    const mask = smoothstep(m.r * 1.3, m.r * 0.35, d);
+    let ridge = 0, amp = 1, f = 1 / 140, norm = 0;
+    for (let o = 0; o < 4; o++) {
+      const n = 1 - Math.abs(nM(x * f + o * 7.1, z * f - o * 3.3) * 1.4);
+      ridge += n * n * amp;
+      norm += amp;
+      amp *= 0.5;
+      f *= 2.1;
+    }
+    h += (ridge / norm) * m.h * mask;
+  }
+  // El puesto y sus alrededores siguen siendo transitables.
+  return h * smoothstep(95, 170, Math.hypot(x, z));
+}
+
 function rawHeight(x, z) {
-  let h = fbm(nA, x / 320, z / 320, 5) * 44;
-  h += fbm(nB, x / 90, z / 90, 3) * 5;
+  let h = fbm(nA, x / 320, z / 320, 5) * 52;
+  h += fbm(nB, x / 90, z / 90, 3) * 6;
+  h += massif(x, z);
   // Loma central: el puesto del cazador, con buena vista.
   h += 13 * Math.exp(-(x * x + z * z) / (75 * 75));
   // Sierra que cierra el coto por los bordes.
   const d = Math.max(Math.abs(x), Math.abs(z));
-  h += smoothstep(335, 450, d) * 85 * (0.7 + 0.3 * nB(x / 60, z / 60));
+  h += smoothstep(320, 450, d) * 120 * (0.7 + 0.3 * nB(x / 60, z / 60));
   return h;
 }
 
@@ -943,11 +971,11 @@ export class World {
         const u = Math.cos(a) * 3 + 10, v = Math.sin(a) * 3 + 10;
         const ridge = 1 - Math.abs(fbm(nA, u + rr * 1.7, v - rr * 0.9, 5));
         const profile = Math.sin(Math.min(1, rr * 1.35) * Math.PI) * 0.8 + 0.2;
-        let h = (30 + ridge * ridge * 185) * profile;
+        let h = (40 + ridge * ridge * 300) * profile;
         if (j === 0) h = 60;
         if (j === rings) h = -40;
         pos.push(x, h, z);
-        c.copy(near).lerp(far, rr).lerp(snow, smoothstep(150, 205, h) * 0.75);
+        c.copy(near).lerp(far, rr).lerp(snow, smoothstep(200, 280, h) * 0.85);
         col.push(c.r, c.g, c.b);
       }
     }

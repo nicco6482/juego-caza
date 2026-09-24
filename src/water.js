@@ -212,8 +212,15 @@ export class Water {
     scene.add(mesh);
   }
 
-  update(dt, windSpeed) {
+  update(dt, windSpeed, cam) {
     const u = this.u, w = this.world;
+    // El reflejo real (volver a dibujar la escena) solo compensa cerca del lago.
+    if (cam && this.mesh.isReflector !== undefined) {
+      const near = Math.hypot(cam.x - LAKE.x, cam.z - LAKE.z) < LAKE.r + 220;
+      if (!this._reflectBefore) this._reflectBefore = this.mesh.onBeforeRender;
+      this.mesh.onBeforeRender = near ? this._reflectBefore : () => {};
+      u.reflectAmt.value = near ? 1 : 0;
+    }
     u.uTime.value += dt;
     u.wave.value += ((0.45 + windSpeed * 0.14) - u.wave.value) * Math.min(1, dt);
     u.sunDir.value.copy(fogUniforms.fogSunDir.value);

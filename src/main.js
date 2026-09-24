@@ -9,6 +9,7 @@ import { buildRifle, buildShotgun, buildOverUnder, buildSemiAuto, buildLever } f
 import { DogPack } from './dogs.js';
 import { Birds } from './birds.js';
 import * as Trophies from './trophies.js';
+import { Nessie } from './nessie.js';
 import { Hud } from './hud.js';
 import { createPost } from './post.js';
 import { loadModels } from './models.js';
@@ -90,7 +91,7 @@ scene.add(camera);
 
 const hud = new Hud();
 const sfx = new Sfx();
-let world, fauna, effects, rifle, post, water, birds, dogs;
+let world, fauna, effects, rifle, post, water, birds, dogs, nessie;
 const views = {};
 
 const zeroAngles = ZEROS.map((d) => zeroAngle(d));
@@ -268,6 +269,15 @@ function boot() {
     },
   });
 
+  nessie = new Nessie(scene, {
+    onSurface: (n, dist) => {
+      if (game.state !== 'playing') return;
+      for (let i = 0; i < 6; i++) effects.splash(n.pos.clone().setY(LAKE.level).add(new THREE.Vector3((Math.random() - 0.5) * 6, 0, (Math.random() - 0.5) * 6)));
+      sfx.moan(dist, Math.sin(relativeBearing(n.pos)));
+      if (dist < 500) hud.feed('Algo enorme se mueve en el lago…', 'warn');
+    },
+  });
+
   // Modelos 3D opcionales (si no hay, se usan los generados por código).
   loadModels().finally(() => {
     // Mundo de fondo para el menú.
@@ -311,6 +321,7 @@ function newHunt() {
   for (const v of Object.values(views)) v.group.visible = false;
   rifle = views.rifle;
   dogs.reset(player.pos.x, player.pos.z);
+  nessie.reset();
   hud.weaponBar(WEAPON_ORDER.map((k) => WEAPONS[k].short), 0);
   wind.baseAngle = Math.random() * Math.PI * 2;
   wind.baseSpeed = 1.5 + Math.random() * 4.5;
@@ -319,8 +330,8 @@ function newHunt() {
   hud.setScore(0);
   hud.setStance('stand');
   refreshAmmo();
-  hud.feed('Temporada abierta: ciervo, gamo, corzo, jabalí, muflón, cabra montés, búfalo, zorro y liebre.');
-  hud.feed('¡Ojo con el búfalo! Si lo hieres o te acercas mucho, puede embestir.', 'warn');
+  hud.feed('Temporada abierta: ciervo, gamo, corzo, jabalí, muflón, cabra montés, búfalo, elefante, hipopótamo, cocodrilo, zorro y liebre.');
+  hud.feed('¡Ojo! Búfalos, elefantes e hipopótamos pueden embestir, y los cocodrilos del lago se lanzan si te acercas.', 'warn');
   hud.feed('Protegidos: la cierva, el lobo ibérico y el gorila.', 'bad');
   hud.feed('Es época de berrea: escucha a los ciervos para saber dónde están.');
   hud.feed('Caza menor: perdiz, tórtola, zorzal, agachadiza y ánade. Con escopeta (3, 4 o 5) te entran al vuelo.');
@@ -667,6 +678,7 @@ function fire() {
   const b = { pos: start.clone(), prev: start.clone(), vel: _dir.clone().multiplyScalar(W.muzzle || MUZZLE), t: 0, origin: start.clone(), alive: true, shot: game.shotId };
   bullets.push(b);
   birds.onGunshot(player.pos.x, player.pos.z);
+  nessie.onGunshot();
 
   sfx.shot();
   if (W.action === 'bolt') sfx.bolt();
@@ -724,6 +736,7 @@ function fireShotgun() {
   if (W.action === 'semi') sfx.click(sfx.ctx ? sfx.ctx.currentTime + 0.08 : 0, 2600, 0.3);
   fauna.onGunshot(player.pos.x, player.pos.z);
   birds.onGunshot(player.pos.x, player.pos.z);
+  nessie.onGunshot();
   player.recoil += 0.07;
   hud.muzzleFlash();
   rifle.flash.intensity = 50;
@@ -734,6 +747,8 @@ function traceSegment(a, c, ahead) {
   let best = null;
   const bh = birds.segmentHit(a, c);
   if (bh) best = { kind: 'bird', t: bh.t, bird: bh.bird };
+  const nh = nessie.segmentHit(a, c);
+  if (nh && (!best || nh.t < best.t)) best = { kind: 'nessie', t: nh.t, zone: nh.zone };
   const ah = fauna.segmentHit(a, c, ahead);
   if (ah && (!best || ah.t < best.t)) best = { kind: 'animal', t: ah.t, animal: ah.animal, zone: ah.zone };
   const oh = world.segmentObstacle(a, c);
@@ -811,6 +826,22 @@ function resolveImpact(b, hit) {
   const delay = dist / 343;
   const dirN = b.vel.clone().normalize();
   const pan = Math.sin(relativeBearing(hit.point));
+  if (hit.kind === 'nessie') {
+    effects.blood(hit.point, dirN.clone().multiplyScalar(0.6));
+    sfx.thud(delay, dist);
+    if (nessie.kill()) {
+      countHit(b.shot);
+      const pts = 1500 + Math.round(dist * 2);
+      game.score += pts;
+      hud.setScore(game.score);
+      hud.hitmark(true);
+      game.log.push({ name: 'Monstruo del lago', note: hit.zone, dist, pts });
+      hud.banner('¡EL MONSTRUO DEL LAGO!', `Nadie te va a creer · ${hit.zone} · +${pts}`, 'good');
+      showTrophy(Trophies.record({ key: 'nessie', name: 'Monstruo del lago', dist, zone: hit.zone, weapon: WEAPONS[game.weapon].name }));
+      sfx.moan(dist, 0);
+    }
+    return;
+  }
   if (hit.kind === 'bird') {
     if (birds.kill(hit.bird, dirN)) {
       effects.emit(hit.point, { color: '#8a7a66', count: 8, size: 0.05, grow: 1.5, life: 1.4, speed: 1.2, rise: 0.4, alpha: 0.9, grav: 1.2 });
@@ -1261,7 +1292,23 @@ function updateMarkers() {
 let last = performance.now();
 let todTimer = 0;
 // Resolución dinámica: si no llega a ~45 FPS, baja la resolución interna; si va sobrado, la sube.
-const perf = { frames: 0, time: 0, fps: 60, pr: quality.pixelRatio, min: 0.5, max: quality.pixelRatio };
+const perf = { frames: 0, time: 0, fps: 60, pr: quality.pixelRatio, min: 0.62, max: quality.pixelRatio, level: 0 };
+// Escalones de detalle: antes de bajar mucho la resolución se recorta lo que menos se nota.
+const DETAIL = [
+  { draw: 460, grass: 1 },
+  { draw: 380, grass: 0.8 },
+  { draw: 300, grass: 0.6 },
+  { draw: 240, grass: 0.45 },
+];
+function applyDetail(level) {
+  perf.level = level;
+  const d = DETAIL[level];
+  if (fauna) fauna.drawDistance = d.draw;
+  if (world) {
+    world.quality.grassRadius = (QUALITY[settings.quality] || QUALITY.media).grassRadius * d.grass;
+    world.lastGrass.set(1e9, 1e9);
+  }
+}
 const fpsEl = document.getElementById('fps');
 function updatePerf(realDt) {
   perf.frames++;
@@ -1271,15 +1318,21 @@ function updatePerf(realDt) {
   perf.frames = 0;
   perf.time = 0;
   let pr = perf.pr;
-  if (perf.fps < 42) pr = Math.max(perf.min, pr - (perf.fps < 25 ? 0.2 : 0.1));
-  else if (perf.fps > 57) pr = Math.min(perf.max, pr + 0.05);
+  if (perf.fps < 42) {
+    // Primero se recorta detalle lejano; después, la resolución.
+    if (perf.level < DETAIL.length - 1 && game.state === 'playing') applyDetail(perf.level + 1);
+    else pr = Math.max(perf.min, pr - (perf.fps < 25 ? 0.15 : 0.08));
+  } else if (perf.fps > 57) {
+    if (pr < perf.max) pr = Math.min(perf.max, pr + 0.05);
+    else if (perf.level > 0 && perf.fps > 62) applyDetail(perf.level - 1);
+  }
   if (Math.abs(pr - perf.pr) > 0.01 && game.state !== 'loading') {
     perf.pr = pr;
     renderer.setPixelRatio(pr);
     if (post) post.setPixelRatio(pr);
   }
   if (settings.showFps) {
-    fpsEl.textContent = `${Math.round(perf.fps)} FPS · resolución ${Math.round((pr / (window.devicePixelRatio || 1)) * 100)}%`;
+    fpsEl.textContent = `${Math.round(perf.fps)} FPS · resolución ${Math.round((pr / (window.devicePixelRatio || 1)) * 100)}% · detalle ${DETAIL.length - perf.level}/${DETAIL.length}`;
   }
 }
 
@@ -1323,6 +1376,7 @@ function frame(now) {
       wind,
     }, camera.position);
     dogs.update(simDt, player, player.yaw, isShotgun());
+    nessie.update(simDt, player.pos);
     birds.update(simDt, player.pos, player.moving ? (player.sprinting ? 1.8 : STANCE[player.stance].noise) : 0, dogs.flushers(), isShotgun());
 
     // HUD
@@ -1375,7 +1429,7 @@ function frame(now) {
 
   effects.update(simDt);
   world.update(realDt, camera, playing ? player.pos : camera.position, wind.speed);
-  water.update(realDt, wind.speed);
+  water.update(realDt, wind.speed, camera.position);
   hud.update(realDt);
   sfx.update(wind.speed);
   post.render(realDt);
@@ -1453,4 +1507,4 @@ requestAnimationFrame(() => setTimeout(() => {
 
 // Acceso para depuración desde la consola.
 window.__dogs = null;
-window.__sierra = { game, player, get fauna() { return fauna; }, get birds() { return birds; }, camera, startHunt, endHunt, fire, predict, wind };
+window.__sierra = { get nessie() { return nessie; }, game, player, get fauna() { return fauna; }, get birds() { return birds; }, camera, startHunt, endHunt, fire, predict, wind };

@@ -419,6 +419,31 @@ export class Sfx {
     }
   }
 
+  // Bramido del monstruo del lago: muy grave, largo y con eco.
+  moan(dist, pan) {
+    if (!this.ctx || dist > 1500) return;
+    const ctx = this.ctx, t = ctx.currentTime + Math.min(dist / 343, 2.5);
+    const vol = Math.min(0.7, 160 / (dist + 120));
+    const dest = this.out(pan, vol, 2);
+    for (const [f, type, g0] of [[55, 'sawtooth', 0.5], [82, 'sine', 1], [110, 'triangle', 0.4]]) {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.setValueAtTime(f * 0.8, t);
+      o.frequency.linearRampToValueAtTime(f * 1.15, t + 1.2);
+      o.frequency.linearRampToValueAtTime(f * 0.7, t + 3.2);
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 500;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(g0, t + 0.8);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 3.4);
+      o.connect(lp).connect(g).connect(dest);
+      o.start(t);
+      o.stop(t + 3.5);
+    }
+  }
+
   step(vol) {
     if (!this.ctx) return;
     const ctx = this.ctx, t = ctx.currentTime;

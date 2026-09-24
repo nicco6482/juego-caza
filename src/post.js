@@ -12,6 +12,8 @@ const GradeShader = {
     uTime: { value: 0 },
     uVignette: { value: 0.9 },
     uGrain: { value: 0.035 },
+    uTexel: { value: new THREE.Vector2(1 / 1920, 1 / 1080) },
+    uSharp: { value: 0.35 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -21,10 +23,15 @@ const GradeShader = {
     }`,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
-    uniform float uTime, uVignette, uGrain;
+    uniform float uTime, uVignette, uGrain, uSharp;
+    uniform vec2 uTexel;
     varying vec2 vUv;
     void main() {
       vec3 c = texture2D(tDiffuse, vUv).rgb;
+      // Nitidez: realza los bordes (compensa cuando la resolución baja).
+      vec3 blur = (texture2D(tDiffuse, vUv + vec2(uTexel.x, 0.0)).rgb + texture2D(tDiffuse, vUv - vec2(uTexel.x, 0.0)).rgb
+                 + texture2D(tDiffuse, vUv + vec2(0.0, uTexel.y)).rgb + texture2D(tDiffuse, vUv - vec2(0.0, uTexel.y)).rgb) * 0.25;
+      c = max(c + (c - blur) * uSharp, 0.0);
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
       c = mix(vec3(l), c, 1.1);
       c += (c - 0.5) * 0.07;
@@ -57,20 +64,30 @@ export function createPost(renderer, scene, camera, quality) {
   const grade = new ShaderPass(GradeShader);
   composer.addPass(grade);
 
-  return {
+  const api = {
     render(dt) {
       grade.uniforms.uTime.value += dt;
       composer.render(dt);
     },
     setSize(w, h) {
       composer.setSize(w, h);
+      this.updateTexel();
     },
     setPixelRatio(pr) {
       composer.setPixelRatio(pr);
       composer.setSize(innerWidth, innerHeight);
+      this.updateTexel();
+    },
+    updateTexel() {
+      const pr = renderer.getPixelRatio();
+      grade.uniforms.uTexel.value.set(1 / (innerWidth * pr), 1 / (innerHeight * pr));
+      // Más nitidez cuanto más baja la resolución interna.
+      grade.uniforms.uSharp.value = 0.25 + Math.max(0, 1 - pr / (window.devicePixelRatio || 1)) * 0.6;
     },
     set vignette(v) {
       grade.uniforms.uVignette.value = v;
     },
   };
+  api.updateTexel();
+  return api;
 }
