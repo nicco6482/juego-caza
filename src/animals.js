@@ -6,32 +6,32 @@ import { customize } from './fog.js';
 // Piezas con muy poca variación por cara: el detalle lo pone el shader de pelaje.
 const P = (g, c, pos, rot, sc) => part(g, c, pos, rot, sc, 0.012);
 const Bt = (a, b, r1, r2, c, radial = 8) => between(a, b, r1, r2, c, radial, 0.012);
-import { groundAt, forestAt, slopeAt, PLAY_HALF, clamp } from './world.js';
+import { groundAt, forestAt, slopeAt, waterDepth, PLAY_HALF, clamp } from './world.js';
 
 export const SPECIES = {
   ciervo: {
     name: 'Ciervo', legal: true, points: 120, scale: 1.0, build: 'deer', antlers: 'stag',
-    walk: 1.3, run: 12.5, hearing: 75, sight: 125, smell: 170,
+    walk: 1.3, run: 12.5, hearing: 42, sight: 85, smell: 120,
     col: { body: '#74502f', dark: '#3a2a1b', light: '#c7ae86', rump: '#d9c8a4', nose: '#1d1712', antler: '#d8c7a2' },
   },
   cierva: {
     name: 'Cierva', legal: false, penalty: 250, scale: 0.86, build: 'deer', antlers: null,
-    walk: 1.3, run: 12.5, hearing: 85, sight: 130, smell: 170,
+    walk: 1.3, run: 12.5, hearing: 46, sight: 90, smell: 120,
     col: { body: '#8a6440', dark: '#4a3622', light: '#d2bb92', rump: '#e2d3b2', nose: '#1d1712' },
   },
   corzo: {
     name: 'Corzo', legal: true, points: 150, scale: 0.62, build: 'deer', antlers: 'roe',
-    walk: 1.2, run: 11, hearing: 90, sight: 115, smell: 150,
+    walk: 1.2, run: 11, hearing: 48, sight: 80, smell: 110,
     col: { body: '#8d5a31', dark: '#3d2819', light: '#c9a57c', rump: '#f0e9da', nose: '#161210', antler: '#cdb994' },
   },
   jabali: {
     name: 'Jabalí', legal: true, points: 110, scale: 0.82, build: 'boar', antlers: null,
-    walk: 1.0, run: 10, hearing: 65, sight: 60, smell: 210,
+    walk: 1.0, run: 10, hearing: 36, sight: 45, smell: 140,
     col: { body: '#5e4e3f', dark: '#30271f', light: '#7d6c59', rump: '#5e4e3f', nose: '#5a4640', tusk: '#efe6cf' },
   },
   zorro: {
     name: 'Zorro', legal: true, points: 180, scale: 0.44, build: 'fox', antlers: null,
-    walk: 1.4, run: 11.5, hearing: 95, sight: 95, smell: 170,
+    walk: 1.4, run: 11.5, hearing: 50, sight: 70, smell: 120,
     col: { body: '#b8622a', dark: '#2a1d15', light: '#efe4d2', rump: '#b8622a', nose: '#1a1310' },
   },
 };
@@ -422,10 +422,10 @@ export class Animal {
       if (along > 0.88) s += 2.2 * (1 - d / sp.smell) + 0.5;
     }
     if (s > 0) this.suspicion = Math.min(3, this.suspicion + s * dt);
-    else this.suspicion = Math.max(0, this.suspicion - dt * 0.22);
+    else this.suspicion = Math.max(0, this.suspicion - dt * 0.3);
 
     if (this.state !== 'flee') {
-      if (this.suspicion > 2.2) this.startFlee(ctx.player.x, ctx.player.z);
+      if (this.suspicion > 2.6) this.startFlee(ctx.player.x, ctx.player.z);
       else if (this.suspicion > 1 && this.state !== 'alert') {
         this.threat.set(ctx.player.x, 0, ctx.player.z);
         this.setState('alert', 5 + Math.random() * 4);
@@ -510,8 +510,18 @@ export class Animal {
     this.speed += clamp(this.targetSpeed - this.speed, -accel * dt, accel * dt);
     // Frena en pendientes muy fuertes.
     this.vel.set(Math.sin(this.heading) * this.speed, 0, Math.cos(this.heading) * this.speed);
-    this.pos.x += this.vel.x * dt;
-    this.pos.z += this.vel.z * dt;
+    const nx = this.pos.x + this.vel.x * dt, nz = this.pos.z + this.vel.z * dt;
+    if (waterDepth(nx + this.vel.x * 0.4, nz + this.vel.z * 0.4) > 0.25) {
+      // Agua: se da la vuelta en lugar de meterse.
+      this.desired = this.heading + (this.id % 2 ? 1.6 : -1.6);
+      this.heading += (this.id % 2 ? 1 : -1) * 2.5 * dt;
+      this.speed *= 0.9;
+      this.vel.set(0, 0, 0);
+      if (this.state === 'walk') this.setState('graze', 4 + Math.random() * 6);
+    } else {
+      this.pos.x = nx;
+      this.pos.z = nz;
+    }
 
     if (this.wounded) {
       this.bleedTimer -= dt;
@@ -544,7 +554,7 @@ export class Animal {
     for (let i = 0; i < 6; i++) {
       const x = a.x + (Math.random() - 0.5) * 2 * radius;
       const z = a.z + (Math.random() - 0.5) * 2 * radius;
-      if (slopeAt(x, z) < 0.45) {
+      if (slopeAt(x, z) < 0.45 && waterDepth(x, z) < 0.05) {
         this.target.set(clamp(x, -PLAY_HALF + 30, PLAY_HALF - 30), 0, clamp(z, -PLAY_HALF + 30, PLAY_HALF - 30));
         break;
       }
@@ -705,18 +715,19 @@ export class Fauna {
       const r = minD + Math.random() * (maxD - minD);
       const x = px + Math.sin(a) * r, z = pz + Math.cos(a) * r;
       if (Math.abs(x) > PLAY_HALF - 40 || Math.abs(z) > PLAY_HALF - 40) continue;
-      if (forestAt(x, z) > forestMax || slopeAt(x, z) > 0.4) continue;
+      if (forestAt(x, z) > forestMax || slopeAt(x, z) > 0.4 || waterDepth(x, z) > -0.3) continue;
       return [x, z];
     }
     return null;
   }
 
-  spawnHerd(type, px, pz, minD, maxD) {
-    const spot = this.findSpot(px, pz, minD, maxD, type === 'jabalies' ? 0.3 : 0.08);
+  spawnHerd(type, px, pz, minD, maxD, at = null) {
+    const spot = at || this.findSpot(px, pz, minD, maxD, type === 'jabalies' ? 0.3 : 0.08);
     if (!spot) return;
     const herd = new Herd(spot[0], spot[1]);
     for (const key of HERD_TYPES[type]()) {
-      const x = spot[0] + (Math.random() - 0.5) * 16, z = spot[1] + (Math.random() - 0.5) * 16;
+      let x = spot[0] + (Math.random() - 0.5) * 16, z = spot[1] + (Math.random() - 0.5) * 16;
+      if (waterDepth(x, z) > -0.2) [x, z] = spot;
       const an = new Animal(key, herd, x, z, this.scene);
       an.onBleed = this.hooks.onBleed;
       an.onBledOut = this.hooks.onBledOut;
@@ -728,7 +739,25 @@ export class Fauna {
     this.herds.push(herd);
   }
 
-  spawnInitial(px, pz) {
+  // Manadas en la orilla del lago: bajan a beber y es donde mejor se ven de cerca.
+  spawnLakeHerds(lake) {
+    const types = ['ciervos', 'ciervos', 'corzos', 'jabalies', 'ciervos'];
+    let placed = 0;
+    for (let k = 0; k < 60 && placed < types.length; k++) {
+      const a = (k / 60) * Math.PI * 2 * 7.3;
+      for (let r = lake.r * 0.8; r < lake.r * 1.6; r += 3) {
+        const x = lake.x + Math.cos(a) * r, z = lake.z + Math.sin(a) * r;
+        const d = waterDepth(x, z);
+        if (d < -0.3 && d > -1.5 && slopeAt(x, z) < 0.35) {
+          this.spawnHerd(types[placed++], 0, 0, 0, 0, [x, z]);
+          break;
+        }
+      }
+    }
+  }
+
+  spawnInitial(px, pz, lake) {
+    if (lake) this.spawnLakeHerds(lake);
     const plan = {
       ciervos: 12, corzos: 12, jabalies: 8, zorro: 6,
     };
@@ -774,8 +803,8 @@ export class Fauna {
       if (!a.alive) continue;
       const d = Math.hypot(a.pos.x - x, a.pos.z - z);
       const delay = d / 343 + 0.1 + Math.random() * 0.25;
-      if (d < 260) a.hearShot(x, z, delay, 1);
-      else if (d < 480) a.hearShot(x, z, delay, Math.random() < 0.4 ? 1 : 0.5);
+      if (d < 190) a.hearShot(x, z, delay, 1);
+      else if (d < 420) a.hearShot(x, z, delay, Math.random() < 0.4 ? 1 : 0.5);
     }
   }
 

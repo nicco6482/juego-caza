@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { World, groundAt, forestAt, PLAY_HALF, clamp } from './world.js';
+import { World, groundAt, forestAt, waterDepth, LAKE, PLAY_HALF, clamp } from './world.js';
+import { Water } from './water.js';
 import { Fauna, ZONES } from './animals.js';
 import { Effects } from './effects.js';
 import { Sfx } from './audio.js';
@@ -13,8 +14,8 @@ const HUNT_TIME = 600;
 const MAG_SIZE = 5;
 const RESERVE = 20;
 const ZEROS = [100, 150, 200, 250, 300, 400];
-const ZOOMS = [4, 8, 12];
-const BINOC_ZOOM = 7;
+const ZOOMS = [3, 6, 10, 16, 24];
+const BINOC_ZOOMS = [4, 8, 12];
 const BASE_FOV = 70;
 
 const store = {
@@ -42,15 +43,15 @@ const settings = {
 };
 const QUALITY = {
   alta: {
-    shadows: true, shadowSize: 4096, grass: 30000, grassRadius: 68, grassCell: 0.95, trees: 1, texSize: 512, foliageSize: 1024,
+    shadows: true, shadowSize: 4096, grass: 30000, grassRadius: 68, grassCell: 0.95, trees: 1, texSize: 512, foliageSize: 1024, waterReflect: 0.6, waterSeg: 220,
     bloom: true, msaa: 4, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
   },
   media: {
-    shadows: true, shadowSize: 2048, grass: 14000, grassRadius: 55, grassCell: 1.15, trees: 0.8, texSize: 512, foliageSize: 512,
+    shadows: true, shadowSize: 2048, grass: 14000, grassRadius: 55, grassCell: 1.15, trees: 0.8, texSize: 512, foliageSize: 512, waterReflect: 0.4, waterSeg: 160,
     bloom: true, msaa: 2, pixelRatio: 1,
   },
   baja: {
-    shadows: false, shadowSize: 512, grass: 3500, grassRadius: 38, grassCell: 1.5, trees: 0.55, texSize: 256, foliageSize: 256,
+    shadows: false, shadowSize: 512, grass: 3500, grassRadius: 38, grassCell: 1.5, trees: 0.55, texSize: 256, foliageSize: 256, waterReflect: 0, waterSeg: 100,
     bloom: false, msaa: 0, pixelRatio: 0.8,
   },
 };
@@ -73,7 +74,7 @@ scene.add(camera);
 
 const hud = new Hud();
 const sfx = new Sfx();
-let world, fauna, effects, rifle, post;
+let world, fauna, effects, rifle, post, water;
 
 const zeroAngles = ZEROS.map(zeroAngle);
 
@@ -92,6 +93,7 @@ const game = {
   reloadT: 0,
   zeroIdx: 0,
   zoomIdx: 1,
+  binocIdx: 1,
   timeScale: 1,
   clock: 0,
   ended: false,
@@ -173,6 +175,7 @@ function makeBulletMesh() {
 // ---------- Arranque ----------
 function boot() {
   world = new World(scene, quality, renderer);
+  water = new Water(scene, quality, renderer, world);
   post = createPost(renderer, scene, camera, quality);
   effects = new Effects(scene);
   fauna = new Fauna(scene, {
@@ -194,7 +197,7 @@ function boot() {
   makeBulletMesh();
 
   // Mundo de fondo para el menú.
-  fauna.spawnInitial(0, 0);
+  fauna.spawnInitial(0, 0, LAKE);
   game.state = 'menu';
   document.getElementById('loading').classList.add('hidden');
   document.getElementById('menu').classList.remove('hidden');
@@ -222,7 +225,7 @@ function newHunt() {
   player.aimToggle = false;
   player.binoc = false;
   player.vel.set(0, 0, 0);
-  fauna.spawnInitial(0, 0);
+  fauna.spawnInitial(0, 0, LAKE);
   Object.assign(game, {
     time: HUNT_TIME, score: 0, mag: MAG_SIZE, reserve: RESERVE, shots: 0, hits: 0, log: [], longest: 0,
     boltT: 0, reloadT: 0, timeScale: 1, ended: false,
@@ -427,8 +430,18 @@ addEventListener('mousemove', (e) => {
   player.pitch = clamp(player.pitch - e.movementY * k, -1.45, 1.45);
 });
 addEventListener('wheel', (e) => {
-  if (game.state !== 'playing' || !isScoped()) return;
-  const n = clamp(game.zoomIdx + (e.deltaY < 0 ? 1 : -1), 0, ZOOMS.length - 1);
+  if (game.state !== 'playing') return;
+  const step = e.deltaY < 0 ? 1 : -1;
+  if (player.binoc) {
+    const n = clamp(game.binocIdx + step, 0, BINOC_ZOOMS.length - 1);
+    if (n !== game.binocIdx) {
+      game.binocIdx = n;
+      sfx.zoomTick();
+    }
+    return;
+  }
+  if (!isScoped()) return;
+  const n = clamp(game.zoomIdx + step, 0, ZOOMS.length - 1);
   if (n !== game.zoomIdx) {
     game.zoomIdx = n;
     sfx.zoomTick();
@@ -552,6 +565,11 @@ function traceSegment(a, c, ahead) {
     }
     if (!best || hi < best.t) best = { kind: 'ground', t: hi };
   }
+  if (a.y >= LAKE.level && c.y < LAKE.level) {
+    const tw = (a.y - LAKE.level) / (a.y - c.y);
+    const wx = a.x + (c.x - a.x) * tw, wz = a.z + (c.z - a.z) * tw;
+    if (waterDepth(wx, wz) > 0 && (!best || tw < best.t)) best = { kind: 'water', t: tw };
+  }
   if (best) best.point = a.clone().lerp(c, best.t);
   return best;
 }
@@ -606,7 +624,8 @@ function resolveImpact(b, hit) {
     sfx.thud(delay, dist);
     onAnimalHit(hit.animal, hit.zone, dist, res);
   } else {
-    if (hit.kind === 'tree') effects.bark(hit.point);
+    if (hit.kind === 'water') effects.splash(hit.point);
+    else if (hit.kind === 'tree') effects.bark(hit.point);
     else if (hit.kind === 'rock') {
       effects.dust(hit.point, '#a29d92');
       sfx.ricochet(delay, dist, pan);
@@ -755,9 +774,9 @@ function updateBulletCam(realDt) {
 
 // ---------- Jugador ----------
 const STANCE = {
-  stand: { eye: 1.68, speed: 3.0, noise: 1, vis: 1, sway: 0.0042 },
-  crouch: { eye: 1.05, speed: 1.5, noise: 0.45, vis: 0.55, sway: 0.0026 },
-  prone: { eye: 0.38, speed: 0.6, noise: 0.2, vis: 0.25, sway: 0.0011 },
+  stand: { eye: 1.68, speed: 3.0, noise: 0.7, vis: 1, sway: 0.0042 },
+  crouch: { eye: 1.05, speed: 1.5, noise: 0.25, vis: 0.45, sway: 0.0026 },
+  prone: { eye: 0.38, speed: 0.6, noise: 0.1, vis: 0.2, sway: 0.0011 },
 };
 
 function updatePlayer(dt) {
@@ -777,8 +796,15 @@ function updatePlayer(dt) {
   const k = Math.min(1, dt * 10);
   player.vel.x += (tx - player.vel.x) * k;
   player.vel.z += (tz - player.vel.z) * k;
-  player.pos.x += player.vel.x * dt;
-  player.pos.z += player.vel.z * dt;
+  const prevX = player.pos.x, prevZ = player.pos.z;
+  const wade = waterDepth(player.pos.x, player.pos.z) > 0.15 ? 0.5 : 1;
+  player.pos.x += player.vel.x * dt * wade;
+  player.pos.z += player.vel.z * dt * wade;
+  // No se puede entrar donde cubre.
+  if (waterDepth(player.pos.x, player.pos.z) > 1.0) {
+    player.pos.x = prevX;
+    player.pos.z = prevZ;
+  }
   world.collidePlayer(player.pos, 0.4);
   player.pos.x = clamp(player.pos.x, -PLAY_HALF, PLAY_HALF);
   player.pos.z = clamp(player.pos.z, -PLAY_HALF, PLAY_HALF);
@@ -860,7 +886,7 @@ function updateCamera(dt) {
 
   let fov;
   if (scoped) fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(BASE_FOV / 2)) / ZOOMS[game.zoomIdx]));
-  else if (binoc) fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(BASE_FOV / 2)) / BINOC_ZOOM));
+  else if (binoc) fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(BASE_FOV / 2)) / BINOC_ZOOMS[game.binocIdx]));
   else fov = BASE_FOV - player.aim * 18;
   if (Math.abs(camera.fov - fov) > 1e-3) {
     camera.fov = fov;
@@ -988,7 +1014,7 @@ function frame(now) {
     updateBullets(simDt);
     fauna.update(simDt, {
       player: player.pos,
-      noise: player.moving ? (player.sprinting ? 2.4 : STANCE[player.stance].noise) : 0,
+      noise: player.moving ? (player.sprinting ? 1.8 : STANCE[player.stance].noise) : 0,
       visibility: STANCE[player.stance].vis * (player.moving ? 1 : 0.35) * (forestAt(player.pos.x, player.pos.z) > 0.06 ? 0.7 : 1),
       wind,
     }, camera.position);
@@ -1004,10 +1030,10 @@ function frame(now) {
     if (scoped || binoc) {
       const range = rangefind();
       hud.optic(scoped ? 'scope' : 'binoc', THREE.MathUtils.degToRad(camera.fov), {
-        zoom: scoped ? `${ZOOMS[game.zoomIdx]}×` : `${BINOC_ZOOM}×`,
+        zoom: scoped ? `${ZOOMS[game.zoomIdx]}×` : `${BINOC_ZOOMS[game.binocIdx]}×`,
         range: range === Infinity ? '— m' : `${Math.round(range)} m`,
         zero: scoped ? `Alza ${ZEROS[game.zeroIdx]} m` : '',
-        hint: scoped ? 'Shift: aguantar respiración · Rueda: aumentos · ↑↓: alza' : 'Mira un animal para marcarlo · B: guardar',
+        hint: scoped ? 'Shift: aguantar respiración · Rueda: aumentos · ↑↓: alza' : 'Mira un animal para marcarlo · Rueda: aumentos · B: guardar',
       });
     } else if (!bulletCam.active) {
       hud.optic('');
@@ -1041,6 +1067,7 @@ function frame(now) {
 
   effects.update(simDt);
   world.update(realDt, camera, playing ? player.pos : camera.position, wind.speed);
+  water.update(realDt, wind.speed);
   hud.update(realDt);
   sfx.update(wind.speed);
   post.render(realDt);

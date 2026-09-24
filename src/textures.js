@@ -491,3 +491,17 @@ function loadPhotos(tex) {
     })
     .catch(() => {});
 }
+
+// Relieve del oleaje: ondas cruzadas + ruido, repetible sin costuras.
+export function waterNormals(S = 512) {
+  const s = new Surface(S);
+  s.fill((u, v) => {
+    let h = 0;
+    const waves = [[3, 1, 0.08], [-2, 3, 0.06], [5, -2, 0.04], [1, 6, 0.03], [-7, -3, 0.02]];
+    for (const [a, b, amp] of waves) h += Math.sin((u * a + v * b) * Math.PI * 2 + a) * amp;
+    h += (fbmP(u, v, 6, 6, 6, 301) - 0.5) * 1.1 + (fbmP(u, v, 16, 16, 3, 302) - 0.5) * 0.25;
+    return [0.5, 0.5, 1, h];
+  });
+  const t = s.toTextures(7, 8).normal;
+  return t;
+}

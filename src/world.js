@@ -21,7 +21,7 @@ export const smoothstep = (a, b, x) => {
   return t * t * (3 - 2 * t);
 };
 
-function baseHeight(x, z) {
+function rawHeight(x, z) {
   let h = fbm(nA, x / 320, z / 320, 5) * 44;
   h += fbm(nB, x / 90, z / 90, 3) * 5;
   // Loma central: el puesto del cazador, con buena vista.
@@ -30,6 +30,48 @@ function baseHeight(x, z) {
   const d = Math.max(Math.abs(x), Math.abs(z));
   h += smoothstep(335, 450, d) * 85 * (0.7 + 0.3 * nB(x / 60, z / 60));
   return h;
+}
+
+// ---------- Lago ----------
+// Se busca una hondonada cerca del puesto y se excava un vaso de orilla irregular.
+export const LAKE = (() => {
+  let best = null;
+  for (let a = 0; a < 32; a++) {
+    for (const r of [95, 120, 145, 170]) {
+      const ang = (a / 32) * Math.PI * 2;
+      const x = Math.sin(ang) * r, z = Math.cos(ang) * r;
+      let h = 0;
+      for (let k = 0; k < 8; k++) h += rawHeight(x + Math.sin(k) * 40, z + Math.cos(k) * 40);
+      h = h / 8 + rawHeight(x, z);
+      if (!best || h < best.h) best = { x, z, h };
+    }
+  }
+  const r = 62;
+  let rim = Infinity;
+  for (let k = 0; k < 24; k++) rim = Math.min(rim, rawHeight(best.x + Math.sin(k) * r * 1.3, best.z + Math.cos(k) * r * 1.3));
+  const level = Math.min(rawHeight(best.x, best.z), rim) - 0.4;
+  return { x: best.x, z: best.z, r, level };
+})();
+
+function lakeShape(x, z) {
+  const dx = x - LAKE.x, dz = z - LAKE.z;
+  const ang = Math.atan2(dz, dx);
+  const wobble = nB(Math.cos(ang) * 1.3 + 11, Math.sin(ang) * 1.3 + 5) * 0.28 + nG(Math.cos(ang) * 3 + 2, Math.sin(ang) * 3) * 0.08;
+  return Math.hypot(dx, dz) / (LAKE.r * (1 + wobble));
+}
+
+function baseHeight(x, z) {
+  const raw = rawHeight(x, z);
+  if (Math.abs(x - LAKE.x) > LAKE.r * 2.2 || Math.abs(z - LAKE.z) > LAKE.r * 2.2) return raw;
+  const d = lakeShape(x, z);
+  if (d > 1.7) return raw;
+  const L = LAKE.level;
+  let target;
+  if (d < 1) target = L - 0.3 - 5.5 * (1 - d * d);
+  else if (d < 1.25) target = L - 0.3 + (d - 1) * 6;
+  else target = L + 1.2 + (d - 1.25) * 3;
+  const bowl = 1 - smoothstep(1.2, 1.7, d);
+  return raw * (1 - bowl) + target * bowl;
 }
 
 // > 0.06 es bosque cerrado; por debajo, pastos y dehesa.
@@ -56,6 +98,13 @@ export function groundAt(x, z) {
   const ha = heights[i], hb = heights[i + 1], hc = heights[i + W], hd = heights[i + W + 1];
   if (fx + fz <= 1) return ha + (hb - ha) * fx + (hc - ha) * fz;
   return hd + (hc - hd) * (1 - fx) + (hb - hd) * (1 - fz);
+}
+
+// Profundidad del agua en un punto (negativa = seco). Solo cuenta dentro del lago.
+export function waterDepth(x, z) {
+  if (Math.abs(x - LAKE.x) > LAKE.r * 1.8 || Math.abs(z - LAKE.z) > LAKE.r * 1.8) return -99;
+  if (lakeShape(x, z) > 1.35) return -99;
+  return LAKE.level - groundAt(x, z);
 }
 
 export function slopeAt(x, z) {
@@ -410,10 +459,12 @@ export class World {
       const rock = clamp(smoothstep(0.2, 0.34, slope) + smoothstep(60, 95, y) * 0.8, 0, 1);
       const patches = smoothstep(0.3, 0.55, fbm(nB, x / 25 + 7, z / 25, 3));
       const dirt = clamp(smoothstep(0.09, 0.2, slope) + patches * 0.8, 0, 1) * (1 - rock);
-      const forest = smoothstep(-0.02, 0.14, forestAt(x, z)) * (1 - rock) * (1 - dirt * 0.5);
-      const grass = Math.max(0, 1 - rock - dirt - forest);
-      const sum = grass + dirt + rock + forest + 1e-5;
-      splat.set([grass / sum, dirt / sum, rock / sum, forest / sum], i * 4);
+      const wd = waterDepth(x, z);
+      const mud = wd > -99 ? smoothstep(-1.2, -0.2, wd) : 0;
+      const forest = smoothstep(-0.02, 0.14, forestAt(x, z)) * (1 - rock) * (1 - dirt * 0.5) * (1 - mud);
+      const grass = Math.max(0, 1 - rock - dirt - forest - mud);
+      const sum = grass + dirt + mud + rock + forest + 1e-5;
+      splat.set([grass / sum, (dirt + mud) / sum, rock / sum, forest / sum], i * 4);
       const n = fbm(nG, x / 45, z / 45, 2);
       c.copy(lush).lerp(dry, smoothstep(-0.15, 0.4, n + nB(x / 13, z / 13) * 0.15));
       tint.set([c.r, c.g, c.b], i * 3);
@@ -427,6 +478,7 @@ export class World {
         tGrass: { value: t.grass.map }, tDirt: { value: t.dirt.map }, tRock: { value: t.rock.map }, tForest: { value: t.forest.map },
         nGrass: { value: t.grass.normal }, nDirt: { value: t.dirt.normal }, nRock: { value: t.rock.normal }, nForest: { value: t.forest.normal },
         tMacro: { value: t.macro },
+        uLake: { value: new THREE.Vector4(LAKE.x, LAKE.z, LAKE.r * 1.25, LAKE.level) },
       });
       sh.vertexShader = `
         attribute vec4 splat;
@@ -442,6 +494,7 @@ export class World {
         vTNormal = normal;`);
       sh.fragmentShader = `
         uniform sampler2D tGrass, tDirt, tRock, tForest, nGrass, nDirt, nRock, nForest, tMacro;
+        uniform vec4 uLake;
         varying vec4 vSplat;
         varying vec3 vTint;
         varying vec3 vTPos;
@@ -467,9 +520,16 @@ export class World {
           vec3 cF = mix(texture2D(tForest, tuvA).rgb, texture2D(tForest, tuvB).rgb, 0.4);
           vec3 albedo = cG * w.x + cD * w.y + cR * w.z + cF * w.w;
           albedo *= mix(0.78, 1.2, macro.r);
+          // Ribera mojada y fondo del lago: más oscuro y verdoso.
+          float lakeD = length((vTPos.xz - uLake.xy) / uLake.z);
+          float wet = (1.0 - smoothstep(1.2, 1.6, lakeD)) * (1.0 - smoothstep(uLake.w - 0.2, uLake.w + 0.45, vTPos.y));
+          albedo *= mix(vec3(1.0), vec3(0.5, 0.52, 0.46), wet);
+          albedo *= mix(vec3(1.0), vec3(0.72, 0.85, 0.8), (1.0 - smoothstep(uLake.w - 1.0, uLake.w, vTPos.y)) * wet);
           diffuseColor.rgb *= albedo;`)
+
         .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-          roughnessFactor = mix(roughnessFactor, 0.72, w.z);`)
+          roughnessFactor = mix(roughnessFactor, 0.72, w.z);
+          roughnessFactor = mix(roughnessFactor, 0.35, wet);`)
         .replace('#include <normal_fragment_maps>', `
           vec3 tn = (texture2D(nGrass, tuvA).xyz * 2.0 - 1.0) * w.x
                   + (texture2D(nDirt, tuvA).xyz * 2.0 - 1.0) * w.y
@@ -721,7 +781,7 @@ export class World {
       }
       return out;
     };
-    const clearing = (x, z, r) => x * x + z * z > r * r;
+    const clearing = (x, z, r) => x * x + z * z > r * r && waterDepth(x, z) < -0.6;
     const dens = this.quality.trees;
     const pines = scatter(Math.round(4300 * dens), 70000, (x, z) => clearing(x, z, 30) && forestAt(x, z) > 0.06 && R() < 0.85);
     const oaks = scatter(Math.round(700 * dens), 60000, (x, z) => {
@@ -845,6 +905,7 @@ export class World {
         const prob = f < 0.04 ? 0.92 : 0.2;
         if (hash2(cx, cz, 3) > prob) continue;
         if (slopeAt(x, z) > 0.3) continue;
+        if (waterDepth(x, z) > -0.15) continue;
         const r4 = hash2(cx, cz, 4);
         const fadeOut = smoothstep(R, R - 16, d);
         const h = (0.3 + r4 * 0.5) * fadeOut;

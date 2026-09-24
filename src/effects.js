@@ -69,6 +69,11 @@ export class Effects {
     this.emit(pos, { color: '#6d5a42', count: 5, size: 0.08, grow: 1, life: 0.6, speed: 3, rise: 3, alpha: 1, grav: 9.8 });
   }
 
+  splash(pos) {
+    this.emit(pos, { color: '#e8eef0', count: 14, size: 0.06, grow: 1.2, life: 0.9, speed: 1.6, rise: 4.5, alpha: 0.9, grav: 9.8 });
+    this.emit(pos, { color: '#dfe7ea', count: 5, size: 0.3, grow: 3, life: 1.2, speed: 0.5, rise: 0.8, alpha: 0.45 });
+  }
+
   bark(pos) {
     this.emit(pos, { color: '#6b4c33', count: 8, size: 0.07, grow: 1, life: 0.7, speed: 3, rise: 1.5, alpha: 1, grav: 9.8 });
     this.emit(pos, { color: '#a58a6c', count: 3, size: 0.3, grow: 2.5, life: 1, speed: 0.6, rise: 0.4, alpha: 0.5 });
