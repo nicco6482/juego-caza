@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sierra Silenciosa</title>
+  <meta name="description" content="Juego de caza en primera persona con rifle de precisión, en el navegador.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%2213%22 fill=%22none%22 stroke=%22%23e0a45a%22 stroke-width=%223%22/%3E%3Cpath d=%22M16 2v28M2 16h28%22 stroke=%22%23e0a45a%22 stroke-width=%222%22/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three.module.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- Óptica (visor / prismáticos) -->
+  <canvas id="optic" class="hidden"></canvas>
+  <div id="optic-info" class="hidden">
+    <div class="optic-row"><span id="optic-zoom"></span><span id="optic-range"></span><span id="optic-zero"></span></div>
+    <div id="optic-hint"></div>
+  </div>
+  <div id="flash"></div>
+  <div id="letterbox"><i></i><i></i></div>
+  <div id="hitmark"></div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="markers"></div>
+    <div id="crosshair"></div>
+
+    <div id="top">
+      <div class="panel score-box"><small>Puntos</small><span id="score">0</span></div>
+      <div id="compass"><div id="compass-strip"></div><div class="compass-caret"></div></div>
+      <div class="panel time-box"><small>Luz</small><span id="timer">10:00</span></div>
+    </div>
+
+    <div id="wind" class="panel">
+      <small>Viento</small>
+      <svg id="wind-arrow" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 4 L29 22 L22 19 L22 36 L18 36 L18 19 L11 22 Z"/></svg>
+      <span id="wind-speed">0 m/s</span>
+      <em>Tu olor va hacia la flecha</em>
+    </div>
+
+    <div id="feed"></div>
+    <div id="banner"></div>
+    <div id="tip"></div>
+
+    <div id="bottom-left" class="panel">
+      <div id="stance" data-stance="stand">De pie</div>
+      <div id="breath"><div id="breath-fill"></div></div>
+      <small>Respiración</small>
+    </div>
+
+    <div id="ammo" class="panel">
+      <div id="ammo-mag"></div>
+      <div class="ammo-meta"><span id="ammo-reserve">20</span><small>en reserva</small></div>
+      <div id="ammo-state"></div>
+    </div>
+  </div>
+
+  <!-- Pantallas -->
+  <div id="loading" class="screen">
+    <div class="load-inner"><h1>Sierra Silenciosa</h1><p>Generando el coto…</p><div class="spinner"></div></div>
+  </div>
+
+  <div id="menu" class="screen hidden">
+    <div class="menu-card">
+      <p class="eyebrow">Caza mayor · Sierra de la Rompiente</p>
+      <h1>Sierra<br>Silenciosa</h1>
+      <p class="lead">Diez minutos de luz. Un rifle de cerrojo, veinticinco balas y un coto de pinar y dehesa. Lee el viento, acércate sin ruido y haz que cada disparo cuente.</p>
+      <div class="menu-actions">
+        <button id="btn-start" class="primary">Empezar cacería</button>
+        <button id="btn-help">Cómo se juega</button>
+      </div>
+      <p id="menu-best"></p>
+      <details class="options">
+        <summary>Opciones</summary>
+        <label>Sensibilidad del ratón <input id="opt-sens" type="range" min="0.3" max="2.5" step="0.05"></label>
+        <label>Calidad gráfica
+          <select id="opt-quality">
+            <option value="alta">Alta</option>
+            <option value="media">Media</option>
+            <option value="baja">Baja (equipos modestos)</option>
+          </select>
+        </label>
+        <label class="check"><input id="opt-bulletcam" type="checkbox"> Cámara de bala en los tiros largos</label>
+      </details>
+      <p class="note">Necesitas ratón y teclado. Mejor con cascos.</p>
+    </div>
+  </div>
+
+  <div id="help" class="screen hidden">
+    <div class="menu-card wide">
+      <h2>Cómo se juega</h2>
+      <div class="help-grid">
+        <section>
+          <h3>Controles</h3>
+          <dl>
+            <dt>W A S D</dt><dd>Moverse</dd>
+            <dt>Shift</dt><dd>Correr · con el visor, aguantar la respiración</dd>
+            <dt>C / Z</dt><dd>Agacharse / tumbarse</dd>
+            <dt>Espacio</dt><dd>Ponerse de pie</dd>
+            <dt>Clic derecho</dt><dd>Visor (mantener) · F lo deja fijo</dd>
+            <dt>Clic izquierdo</dt><dd>Disparar</dd>
+            <dt>Rueda</dt><dd>Aumentos del visor (4×, 8×, 12×)</dd>
+            <dt>↑ / ↓</dt><dd>Alza: puesta a cero de 100 a 400 m</dd>
+            <dt>B</dt><dd>Prismáticos (marcan los animales)</dd>
+            <dt>R</dt><dd>Recargar</dd>
+            <dt>Esc</dt><dd>Pausa</dd>
+          </dl>
+        </section>
+        <section>
+          <h3>El oficio</h3>
+          <ul>
+            <li><b>El viento manda.</b> Si tu olor les llega, huyen. Acércate con el viento de cara (la flecha apuntando hacia ti).</li>
+            <li><b>Ruido y silueta.</b> Correr se oye de lejos; agachado o tumbado te ven mucho menos.</li>
+            <li><b>La bala cae.</b> El rifle está a cero a 100 m. Más lejos, apunta más alto usando las marcas de la retícula (cada punto es 1 milirradián) o sube el alza.</li>
+            <li><b>Tiro ético.</b> Corazón y pulmones, justo detrás de la pata delantera, dan más puntos. Un tiro al cuerpo solo hiere: sigue la sangre.</li>
+            <li><b>Cierva protegida.</b> Abatir una hembra de ciervo te cuesta 250 puntos.</li>
+            <li><b>Cuanto más lejos, más puntos.</b> Pero cada fallo avisa a todo el monte.</li>
+          </ul>
+        </section>
+      </div>
+      <div class="menu-actions"><button id="btn-help-back" class="primary">Volver</button></div>
+    </div>
+  </div>
+
+  <div id="pause" class="screen hidden">
+    <div class="menu-card">
+      <h2>Pausa</h2>
+      <div class="menu-actions column">
+        <button id="btn-resume" class="primary">Continuar</button>
+        <button id="btn-pause-help">Controles</button>
+        <button id="btn-quit">Terminar cacería</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="results" class="screen hidden">
+    <div class="menu-card wide">
+      <p class="eyebrow" id="res-reason"></p>
+      <h2>Resultado</h2>
+      <div class="res-score"><span id="res-score">0</span><small>puntos</small></div>
+      <p id="res-best"></p>
+      <div id="res-stats"></div>
+      <ul id="res-log"></ul>
+      <div class="menu-actions">
+        <button id="btn-again" class="primary">Otra cacería</button>
+        <button id="btn-menu">Menú</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
