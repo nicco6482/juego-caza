@@ -188,12 +188,12 @@ function oakGeometries(R) {
   ]);
   const cards = [];
   const center = new THREE.Vector3(0, 3.5, 0);
-  for (let i = 0; i < 64; i++) {
+  for (let i = 0; i < 95; i++) {
     // Puntos en un elipsoide aplanado, más densos en la superficie de la copa.
     const u = R() * 2 - 1, th = R() * Math.PI * 2, rr = Math.pow(R(), 0.35);
     const s = Math.sqrt(1 - u * u);
     const p = new THREE.Vector3(s * Math.cos(th) * 3.1 * rr, u * 1.45 * rr, s * Math.sin(th) * 3.0 * rr).add(center);
-    const size = 1.5 + R() * 0.8;
+    const size = 1.25 + R() * 0.7;
     const n = p.clone().sub(center).normalize();
     n.y = n.y * 0.7 + 0.45;
     const a = R() * Math.PI * 2;
@@ -224,6 +224,63 @@ function bushGeometry(R) {
     cards.push({
       o: [p.x, p.y - size * 0.45, p.z], len: [0, size, 0], side: [Math.cos(a) * size, 0, Math.sin(a) * size], taper: 1,
       n0: n.toArray(), n1: n.toArray(), c0: [ao * 0.8, ao * 0.8, ao * 0.8], c1: [ao, ao, ao],
+    });
+  }
+  return cardGeometry(cards);
+}
+
+// Pino piñonero: tronco alto y desnudo y copa en forma de sombrilla.
+function stonePineGeometries(R) {
+  const tint = '#b89a80';
+  const lean = (R() - 0.5) * 0.8;
+  const top = [lean, 6.6, (R() - 0.5) * 0.6];
+  const limbs = [barkLimb([0, -0.6, 0], top, 0.36, 0.22, tint, 10)];
+  const tips = [];
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + R() * 0.6;
+    const tip = [top[0] + Math.cos(a) * 2.4, 8.3 + R() * 0.5, top[2] + Math.sin(a) * 2.4];
+    tips.push(tip);
+    limbs.push(barkLimb(top, tip, 0.17, 0.08, tint, 7));
+  }
+  const trunk = mergeUV(limbs);
+  const cards = [];
+  const cx = top[0], cz = top[2];
+  for (let ring = 0; ring < 6; ring++) {
+    const r = 0.4 + ring * 0.85;
+    const count = 5 + ring * 5;
+    for (let k = 0; k < count; k++) {
+      const a = (k / count) * Math.PI * 2 + ring * 0.37 + R() * 0.3;
+      const y = 9.5 - Math.pow(r / 4.7, 2) * 1.6 + (R() - 0.5) * 0.25;
+      const len = 1.5 + R() * 0.5;
+      const dir = [Math.cos(a) * len, -0.18 * len, Math.sin(a) * len];
+      const ao = 0.55 + (1 - r / 5) * 0.1 + (y - 7.9) * 0.2;
+      for (const roll of [(R() - 0.5) * 0.3, 0.9]) {
+        const width = 1.5;
+        cards.push({
+          o: [cx + Math.cos(a) * (r - 0.6), y, cz + Math.sin(a) * (r - 0.6)], len: dir,
+          side: [-Math.sin(a) * width * Math.cos(roll), width * Math.sin(roll), Math.cos(a) * width * Math.cos(roll)], taper: 0.7,
+          n0: [Math.cos(a) * 0.3, 1, Math.sin(a) * 0.3], n1: [Math.cos(a) * 0.6, 0.8, Math.sin(a) * 0.6],
+          c0: [ao * 0.8, ao * 0.8, ao * 0.78], c1: [ao, ao, ao * 0.95],
+        });
+      }
+    }
+  }
+  return { trunk, foliage: cardGeometry(cards) };
+}
+
+// Jara: mata erguida de hojas estrechas y flores blancas.
+function jaraGeometry(R) {
+  const cards = [];
+  for (let i = 0; i < 22; i++) {
+    const th = R() * Math.PI * 2, rr = Math.sqrt(R()) * 0.55;
+    const h = 0.7 + R() * 0.6;
+    const x = Math.cos(th) * rr, z = Math.sin(th) * rr;
+    const a = R() * Math.PI;
+    const size = 0.75 + R() * 0.4;
+    const ao = 0.6 + R() * 0.2;
+    cards.push({
+      o: [x, h - size * 0.5, z], len: [x * 0.2, size, z * 0.2], side: [Math.cos(a) * size, 0, Math.sin(a) * size], taper: 1,
+      n0: [x, 0.8, z], n1: [x, 1, z], c0: [ao * 0.75, ao * 0.75, ao * 0.75], c1: [1, 1, 1],
     });
   }
   return cardGeometry(cards);
@@ -274,6 +331,16 @@ const WIND_GLSL = /* glsl */ `
   transformed.x += (sin(uTime * 0.9 + wPh) * 0.12 * wH * wH + sin(uTime * 2.3 + wPh * 3.0 + position.y) * 0.025 * wH) * uWind;
   transformed.z += cos(uTime * 0.7 + wPh) * 0.08 * wH * wH * uWind;
 `;
+
+// Contraluz: cuando miras hacia el sol, las hojas dejan pasar la luz y se iluminan.
+function translucency(sh, amount) {
+  sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+    #ifdef USE_FOG
+      vec3 tlView = normalize(vFogWorldPos - cameraPosition);
+      float tlSun = pow(max(dot(tlView, fogSunDir), 0.0), 4.0);
+      totalEmissiveRadiance += diffuseColor.rgb * fogSunColor * tlSun * ${amount.toFixed(2)};
+    #endif`);
+}
 
 export class World {
   constructor(scene, quality, renderer) {
@@ -627,7 +694,10 @@ export class World {
     const barkMat = customize(new THREE.MeshStandardMaterial({ map: t.bark.map, normalMap: t.bark.normal, vertexColors: true, roughness: 0.95 }), 'bark');
     const leafMat = (map, name) => customize(
       new THREE.MeshStandardMaterial({ map, alphaTest: 0.35, alphaToCoverage: this.quality.msaa > 0, vertexColors: true, roughness: 0.82 }),
-      name, (sh) => this.windShader(sh)
+      name, (sh) => {
+        this.windShader(sh);
+        translucency(sh, 0.55);
+      }
     );
     const pineMat = leafMat(t.pine, 'pine');
     const oakMat = leafMat(t.oak, 'oak');
@@ -635,8 +705,11 @@ export class World {
     const rockMat = customize(new THREE.MeshStandardMaterial({ map: t.rock.map, normalMap: t.rock.normal, vertexColors: true, roughness: 0.8 }), 'rock');
 
     const pine = pineGeometries(R);
-    const oak = oakGeometries(R);
+    const oaks2 = [oakGeometries(R), oakGeometries(R)];
+    const stone = stonePineGeometries(R);
     const bush = bushGeometry(R);
+    const jara = jaraGeometry(R);
+    const jaraMat = leafMat(t.jara, 'jara');
     const rockGeo = rockGeometry();
 
     const scatter = (count, tries, test) => {
@@ -656,6 +729,14 @@ export class World {
       return clearing(x, z, 26) && f < 0.06 && f > -0.45 && R() < 0.2;
     });
     const bushes = scatter(Math.round(2200 * dens), 40000, (x, z) => clearing(x, z, 7) && forestAt(x, z) > -0.25 && R() < 0.55);
+    const jaras = scatter(Math.round(2600 * dens), 50000, (x, z) => {
+      const f = forestAt(x, z);
+      return clearing(x, z, 7) && f < 0.1 && f > -0.4 && fbm(nB, x / 60, z / 60, 2) > -0.05 && R() < 0.5;
+    });
+    const stones = scatter(Math.round(380 * dens), 60000, (x, z) => {
+      const f = forestAt(x, z);
+      return clearing(x, z, 30) && f < 0.12 && f > -0.3 && R() < 0.12;
+    });
     const rocks = scatter(300, 6000, (x, z) => clearing(x, z, 6) && (slopeAt(x, z) > 0.15 || R() < 0.25));
 
     const make = (list, sMin, sMax, tintFn, collider) => list.map((p) => {
@@ -678,10 +759,18 @@ export class World {
     this.instanceChunks(pine.foliage, pineMat, pineI, true);
 
     const oakI = make(oaks, 0.8, 1.35, leafTint, (s) => ({ r: 0.4 * s, h: 3 * s, type: 'tree' }));
-    this.instanceChunks(oak.trunk, barkMat, oakI.map((p) => ({ ...p, c: [0.8, 0.78, 0.76] })), true);
-    this.instanceChunks(oak.foliage, oakMat, oakI, true);
+    oaks2.forEach((oak, v) => {
+      const part = oakI.filter((_, i) => i % 2 === v);
+      this.instanceChunks(oak.trunk, barkMat, part.map((p) => ({ ...p, c: [0.8, 0.78, 0.76] })), true);
+      this.instanceChunks(oak.foliage, oakMat, part, true);
+    });
+
+    const stoneI = make(stones, 0.85, 1.25, leafTint, (s) => ({ r: 0.38 * s, h: 7 * s, type: 'tree' }));
+    this.instanceChunks(stone.trunk, barkMat, stoneI.map((p) => ({ ...p, c: [0.95, 0.85, 0.8] })), true);
+    this.instanceChunks(stone.foliage, pineMat, stoneI.map((p) => ({ ...p, c: p.c.map((v) => v * 1.08) })), true);
 
     this.instanceChunks(bush, bushMat, make(bushes, 0.7, 1.6, leafTint, null), true);
+    this.instanceChunks(jara, jaraMat, make(jaras, 0.7, 1.3, leafTint, null), true);
     this.instanceChunks(rockGeo, rockMat, make(rocks, 0.6, 2.2, () => {
       const v = 0.85 + R() * 0.25;
       return [v, v * 0.98, v * 0.95];
@@ -722,6 +811,7 @@ export class World {
         transformed.x += (sin(uTime * 1.7 + wph) * 0.09 + sin(uTime * 3.3 + wph * 1.7) * 0.035) * bend;
         transformed.z += cos(uTime * 1.3 + wph) * 0.05 * bend;`
       );
+      translucency(sh, 0.45);
       // Oscurece la base de las matas: sombra de contacto barata.
       sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
         diffuseColor.rgb *= mix(0.45, 1.0, smoothstep(0.0, 0.55, vMapUv.y));`);

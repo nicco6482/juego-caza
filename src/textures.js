@@ -361,14 +361,14 @@ function pineBranch(S, aniso) {
   }, '#2a421d', aniso);
 }
 
-function leafCluster(S, aniso, seed, greens, fill) {
+function leafCluster(S, aniso, seed, greens, fill, { count = 900, size = 0.014, elong = 0.55, flowers = 0 } = {}) {
   return cardTexture(S, S, (g) => {
     const r = rng(seed);
-    for (let i = 0; i < 900; i++) {
+    for (let i = 0; i < count; i++) {
       const ang = r() * Math.PI * 2;
       const rad = Math.sqrt(r()) * S * 0.45;
       const x = S / 2 + Math.cos(ang) * rad, y = S / 2 + Math.sin(ang) * rad;
-      const L = S * (0.014 + r() * 0.012), Wd = L * (0.5 + r() * 0.15);
+      const L = S * (size + r() * size * 0.85), Wd = L * (elong + r() * 0.15);
       g.save();
       g.translate(x, y);
       g.rotate(r() * Math.PI * 2);
@@ -377,12 +377,35 @@ function leafCluster(S, aniso, seed, greens, fill) {
       g.ellipse(0, 0, L, Wd, 0, 0, Math.PI * 2);
       g.fill();
       g.strokeStyle = 'rgba(255,255,230,0.14)';
-      g.lineWidth = 0.7;
+      g.lineWidth = Math.max(0.6, S / 1400);
       g.beginPath();
       g.moveTo(-L * 0.8, 0);
       g.lineTo(L * 0.8, 0);
       g.stroke();
       g.restore();
+    }
+    // Flores de jara: cinco pétalos blancos, mancha granate y centro amarillo.
+    for (let i = 0; i < flowers; i++) {
+      const ang = r() * Math.PI * 2;
+      const rad = Math.sqrt(r()) * S * 0.38;
+      const x = S / 2 + Math.cos(ang) * rad, y = S / 2 + Math.sin(ang) * rad;
+      const R = S * (0.022 + r() * 0.01);
+      const rot = r() * Math.PI;
+      for (let k = 0; k < 5; k++) {
+        const a = rot + (k / 5) * Math.PI * 2;
+        g.fillStyle = k % 2 ? '#f4f1ea' : '#fbf9f4';
+        g.beginPath();
+        g.ellipse(x + Math.cos(a) * R * 0.55, y + Math.sin(a) * R * 0.55, R * 0.62, R * 0.5, a, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = '#6e1a24';
+        g.beginPath();
+        g.arc(x + Math.cos(a) * R * 0.4, y + Math.sin(a) * R * 0.4, R * 0.13, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.fillStyle = '#e8c23a';
+      g.beginPath();
+      g.arc(x, y, R * 0.22, 0, Math.PI * 2);
+      g.fill();
     }
   }, fill, aniso);
 }
@@ -406,10 +429,10 @@ function grassCard(S, aniso) {
       g.quadraticCurveTo(x + lean * 0.3 + w * 0.2, S - h * 0.5, x + w, S);
       g.closePath();
       g.fill();
-      if (r() < 0.18) {
-        g.fillStyle = '#cdb77c';
+      if (r() < 0.07) {
+        g.fillStyle = '#c2ad74';
         g.beginPath();
-        g.ellipse(x + lean, S - h, w * 1.2, S * 0.035, lean / S, 0, Math.PI * 2);
+        g.ellipse(x + lean, S - h, w * 0.8, S * 0.028, lean / S, 0, Math.PI * 2);
         g.fill();
       }
     }
@@ -426,9 +449,12 @@ export function buildTextures(quality, anisotropy) {
     forest: forestFloor(S, anisotropy),
     bark: bark(Math.min(S, 256), anisotropy),
     macro: macroNoise(256),
-    pine: pineBranch(Math.min(S, 512), anisotropy),
-    oak: leafCluster(Math.min(S, 512), anisotropy, 111, ['#2f3e1c', '#3a4a22', '#46572a', '#526433', '#34431f'], '#3a4a22'),
-    bush: leafCluster(256, anisotropy, 121, ['#3d4d22', '#4b5c2a', '#5a6a32', '#46552a'], '#4b5c2a'),
+    pine: pineBranch(quality.foliageSize, anisotropy),
+    oak: leafCluster(quality.foliageSize, anisotropy, 111, ['#2f3e1c', '#3a4a22', '#46572a', '#526433', '#34431f', '#5d6e3a'], '#3a4a22',
+      { count: quality.foliageSize >= 1024 ? 2600 : 1100, size: quality.foliageSize >= 1024 ? 0.009 : 0.013 }),
+    bush: leafCluster(Math.min(quality.foliageSize, 512), anisotropy, 121, ['#3d4d22', '#4b5c2a', '#5a6a32', '#46552a', '#66773a'], '#4b5c2a', { count: 1000, size: 0.014 }),
+    jara: leafCluster(Math.min(quality.foliageSize, 512), anisotropy, 131, ['#27351a', '#2f3f1f', '#394a25', '#435530'], '#2f3f1f',
+      { count: 900, size: 0.026, elong: 0.22, flowers: 9 }),
     grassCard: grassCard(256, anisotropy),
   };
   tex.ms = performance.now() - t0;

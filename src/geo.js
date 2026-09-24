@@ -84,3 +84,88 @@ export function segmentSphere(a, b, c, r, tMax = 1) {
   const t = (-B - Math.sqrt(disc)) / (2 * A);
   return t >= 0 && t <= tMax ? t : -1;
 }
+
+// Suaviza una lista de secciones interpolando (Catmull-Rom) posición y tamaño.
+export function subdivide(points, k = 3) {
+  if (points.length < 3 || k < 2) return points;
+  const out = [];
+  const get = (i) => points[Math.max(0, Math.min(points.length - 1, i))];
+  const cr = (a, b, c, d, t) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t);
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = get(i - 1), p1 = get(i), p2 = get(i + 1), p3 = get(i + 2);
+    for (let s = 0; s < k; s++) {
+      const t = s / k;
+      out.push({
+        p: [0, 1, 2].map((j) => cr(p0.p[j], p1.p[j], p2.p[j], p3.p[j], t)),
+        w: Math.max(0.004, cr(p0.w, p1.w, p2.w, p3.w, t)),
+        h: Math.max(0.004, cr(p0.h, p1.h, p2.h, p3.h, t)),
+      });
+    }
+  }
+  out.push(points[points.length - 1]);
+  return out;
+}
+
+// "Esculpe" un volumen a partir de secciones (superelipses) a lo largo de un camino.
+// points: [{ p: [x, y, z], w, h }]; ref: vector que marca hacia dónde mide `h`.
+// colorFn(t, cos, sin, pos) -> [r, g, b] en espacio lineal. Devuelve geometría no indexada
+// con normales suaves, color y UV (u alrededor, v a lo largo).
+export function loft(points, ref, radial, colorFn, n = 2.3, uvScale = [1, 1]) {
+  const R = new THREE.Vector3(...ref);
+  const P = points.map((q) => new THREE.Vector3(...q.p));
+  const pos = [], col = [], uv = [], idx = [];
+  const rings = P.length;
+  let along = 0;
+  for (let i = 0; i < rings; i++) {
+    if (i > 0) along += P[i].distanceTo(P[i - 1]);
+    const T = P[Math.min(i + 1, rings - 1)].clone().sub(P[Math.max(i - 1, 0)]).normalize();
+    const A = new THREE.Vector3().crossVectors(R, T).normalize();
+    const B = new THREE.Vector3().crossVectors(T, A).normalize();
+    for (let j = 0; j <= radial; j++) {
+      const th = (j / radial) * Math.PI * 2;
+      const c = Math.cos(th), s = Math.sin(th);
+      const ex = Math.sign(c) * Math.pow(Math.abs(c), 2 / n);
+      const ey = Math.sign(s) * Math.pow(Math.abs(s), 2 / n);
+      const v = P[i].clone().addScaledVector(A, ex * points[i].w).addScaledVector(B, ey * points[i].h);
+      pos.push(v.x, v.y, v.z);
+      col.push(...colorFn(i / (rings - 1), c, s, v));
+      uv.push((j / radial) * uvScale[0], along * uvScale[1]);
+    }
+  }
+  const row = radial + 1;
+  for (let i = 0; i < rings - 1; i++) {
+    for (let j = 0; j < radial; j++) {
+      const a = i * row + j, b = (i + 1) * row + j, c = a + 1, d = b + 1;
+      idx.push(a, c, b, c, d, b);
+    }
+  }
+  // Tapas en los extremos.
+  for (const [ring, flip] of [[0, true], [rings - 1, false]]) {
+    const center = pos.length / 3;
+    const p = P[ring];
+    pos.push(p.x, p.y, p.z);
+    col.push(...colorFn(ring / (rings - 1), 0, 0, p));
+    uv.push(0.5, 0);
+    for (let j = 0; j < radial; j++) {
+      const a = ring * row + j, b = a + 1;
+      if (flip) idx.push(center, b, a);
+      else idx.push(center, a, b);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  // La costura (j = 0 y j = radial) tiene vértices duplicados: se igualan sus normales.
+  const nor = g.attributes.normal;
+  for (let i = 0; i < rings; i++) {
+    const a = i * row, b = i * row + radial;
+    const nx = nor.getX(a) + nor.getX(b), ny = nor.getY(a) + nor.getY(b), nz = nor.getZ(a) + nor.getZ(b);
+    const l = Math.hypot(nx, ny, nz) || 1;
+    nor.setXYZ(a, nx / l, ny / l, nz / l);
+    nor.setXYZ(b, nx / l, ny / l, nz / l);
+  }
+  return g.toNonIndexed();
+}

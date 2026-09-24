@@ -42,15 +42,15 @@ const settings = {
 };
 const QUALITY = {
   alta: {
-    shadows: true, shadowSize: 4096, grass: 30000, grassRadius: 68, grassCell: 0.95, trees: 1, texSize: 512,
+    shadows: true, shadowSize: 4096, grass: 30000, grassRadius: 68, grassCell: 0.95, trees: 1, texSize: 512, foliageSize: 1024,
     bloom: true, msaa: 4, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
   },
   media: {
-    shadows: true, shadowSize: 2048, grass: 14000, grassRadius: 55, grassCell: 1.15, trees: 0.8, texSize: 512,
+    shadows: true, shadowSize: 2048, grass: 14000, grassRadius: 55, grassCell: 1.15, trees: 0.8, texSize: 512, foliageSize: 512,
     bloom: true, msaa: 2, pixelRatio: 1,
   },
   baja: {
-    shadows: false, shadowSize: 512, grass: 3500, grassRadius: 38, grassCell: 1.5, trees: 0.55, texSize: 256,
+    shadows: false, shadowSize: 512, grass: 3500, grassRadius: 38, grassCell: 1.5, trees: 0.55, texSize: 256, foliageSize: 256,
     bloom: false, msaa: 0, pixelRatio: 0.8,
   },
 };
@@ -986,7 +986,7 @@ function frame(now) {
       noise: player.moving ? (player.sprinting ? 2.4 : STANCE[player.stance].noise) : 0,
       visibility: STANCE[player.stance].vis * (player.moving ? 1 : 0.35) * (forestAt(player.pos.x, player.pos.z) > 0.06 ? 0.7 : 1),
       wind,
-    });
+    }, camera.position);
 
     // HUD
     hud.setTime(game.time);
@@ -1031,7 +1031,7 @@ function frame(now) {
       camera.updateProjectionMatrix();
     }
     rifle.group.visible = false;
-    fauna.update(simDt, { player: new THREE.Vector3(9999, 0, 9999), noise: 0, visibility: 0, wind });
+    fauna.update(simDt, { player: new THREE.Vector3(9999, 0, 9999), noise: 0, visibility: 0, wind }, camera.position);
   }
 
   effects.update(simDt);
