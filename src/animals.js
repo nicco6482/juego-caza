@@ -1106,7 +1106,7 @@ const HERD_TYPES = {
   hipopotamos: () => Array.from({ length: 2 + Math.floor(Math.random() * 4) }, () => 'hipopotamo'),
   cocodrilos: () => Array.from({ length: 1 + Math.floor(Math.random() * 2) }, () => 'cocodrilo'),
   bufalos: () => Array.from({ length: 4 + Math.floor(Math.random() * 6) }, () => 'bufalo'),
-  gorilas: () => Array.from({ length: 2 + Math.floor(Math.random() * 4) }, () => 'gorila'),
+  gorilas: () => Array.from({ length: 3 + Math.floor(Math.random() * 4) }, () => 'gorila'),
 };
 
 export class Fauna {
@@ -1142,7 +1142,9 @@ export class Fauna {
 
   spawnHerd(type, px, pz, minD, maxD, at = null) {
     const forestMax = { jabalies: 0.3, lobos: 0.3, cabras: 0.35, muflones: 0.15, gorilas: 0.6 }[type] ?? 0.08;
-    const spot = at || this.findSpot(px, pz, minD, maxD, forestMax, type === 'cabras' || type === 'muflones', type === 'gorilas' ? 0.1 : -9);
+    let spot = at || this.findSpot(px, pz, minD, maxD, forestMax, type === 'cabras' || type === 'muflones', type === 'gorilas' ? 0.04 : -9);
+    // Si no hay bosque a esa distancia, los gorilas se quedan en el claro más cercano.
+    if (!spot && type === 'gorilas') spot = this.findSpot(px, pz, minD, maxD, 0.6, false, -9);
     if (!spot) return;
     const herd = new Herd(spot[0], spot[1]);
     for (const key of HERD_TYPES[type]()) {
@@ -1198,13 +1200,15 @@ export class Fauna {
       for (let i = 0; i < 3; i++) this.spawnInWater('cocodrilos', lake);
     }
     const plan = {
-      ciervos: 12, gamos: 7, corzos: 12, jabalies: 8, muflones: 5, cabras: 5, zorro: 6, lobos: 2, liebre: 10, bufalos: 3, gorilas: 2, elefantes: 2,
+      ciervos: 12, gamos: 7, corzos: 12, jabalies: 8, muflones: 5, cabras: 5, zorro: 6, lobos: 2, liebre: 10, bufalos: 3, gorilas: 7, elefantes: 2,
     };
     for (const [t, n] of Object.entries(plan)) {
       // La mayoría cerca del puesto (se distinguen a simple vista); el resto, más lejos.
       for (let i = 0; i < n; i++) {
         const near = i < n * 0.65;
-        this.spawnHerd(t, px, pz, near ? 45 : 150, near ? 200 : 360);
+        // Los gorilas, en la linde del bosque cerca del puesto para que se dejen ver.
+        if (t === 'gorilas') this.spawnHerd(t, px, pz, near ? 35 : 120, near ? 140 : 300);
+        else this.spawnHerd(t, px, pz, near ? 45 : 150, near ? 200 : 360);
       }
     }
   }
