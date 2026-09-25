@@ -26,6 +26,7 @@ class Dog extends Animal {
     this.seed = Math.random() * 100;
     this.state = 'idle';
     this.barkT = 0;
+    this.sit = 0;
     // Punto de la boca (para llevar las aves).
     const b = this.b;
     const hm = new THREE.Matrix4().makeRotationX(-b.rest + 0.35).setPosition(0, b.neckLen, 0);
@@ -60,6 +61,22 @@ class Dog extends Animal {
     return d;
   }
 
+  // Postura de sentado: cuartos traseros al suelo, manos rectas y la cabeza alta.
+  // La inclinación se ajusta a las proporciones (un teckel apenas se inclina).
+  applySit() {
+    const k = this.sit;
+    if (k <= 0.001) return;
+    const b = this.b;
+    const tilt = Math.min(0.75, Math.asin(Math.min(1, (0.82 * b.L) / (0.62 * b.bl)))) * k;
+    this.body.rotation.x = -tilt;
+    this.body.position.y = (b.L - (Math.cos(tilt) * b.L + 0.3 * b.bl * Math.sin(tilt))) * k;
+    for (let i = 0; i < 4; i++) {
+      const rest = i < 2 ? tilt : -0.95 * k;
+      this.legs[i].rotation.x += (rest - this.legs[i].rotation.x) * k;
+    }
+    this.neck.rotation.x += tilt * 0.6;
+  }
+
   mouthPos(out) {
     this.group.updateMatrixWorld(true);
     return this.mouth.getWorldPosition(out);
@@ -85,6 +102,8 @@ export class DogPack {
     for (const [key, n] of roster) for (let k = 0; k < n; k++) this.dogs.push(new Dog(key, scene, i++));
     this.retrieveQueue = [];
     this.tracks = [];
+    this.still = 0;
+    this.lineYaw = null;
     this.visible = false;
     this.setVisible(false);
   }
@@ -97,6 +116,8 @@ export class DogPack {
   reset(px, pz) {
     this.retrieveQueue = [];
     this.tracks = [];
+    this.still = 0;
+    this.lineYaw = null;
     this.dogs.forEach((d, i) => d.place(px - 2 - (i % 3) * 1.2, pz + 1.5 + Math.floor(i / 3) * 1.1));
     this.setVisible(true);
   }
@@ -120,6 +141,15 @@ export class DogPack {
     const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
     const rx = Math.cos(yaw), rz = -Math.sin(yaw);
     const pSpeed = Math.hypot(player.vel ? player.vel.x : 0, player.vel ? player.vel.z : 0);
+    // Perros educados: si te quedas quieto, se sientan en fila delante de ti y esperan.
+    const moving = player.moving ?? pSpeed > 0.3;
+    this.still = moving ? 0 : this.still + dt;
+    if (this.still < 1) this.lineYaw = null;
+    else if (this.lineYaw === null || Math.abs(wrap(yaw - this.lineYaw)) > 1.1) this.lineYaw = yaw;
+    const waiting = this.lineYaw !== null;
+    const lfx = waiting ? -Math.sin(this.lineYaw) : 0, lfz = waiting ? -Math.cos(this.lineYaw) : 0;
+    const lrx = waiting ? Math.cos(this.lineYaw) : 0, lrz = waiting ? -Math.sin(this.lineYaw) : 0;
+    const n = this.dogs.length;
     // Asigna cobros pendientes.
     this.retrieveQueue = this.retrieveQueue.filter((b) => b.state === 'dead');
     for (const b of this.retrieveQueue) {
@@ -183,6 +213,28 @@ export class DogPack {
           }
           d.task = null;
         }
+      } else if (waiting) {
+        // En fila, mirando al cazador, a unos pasos por delante.
+        const side = (d.index - (n - 1) / 2) * 0.95;
+        let ahead = 3.6;
+        let tx = player.pos.x + lfx * ahead + lrx * side, tz = player.pos.z + lfz * ahead + lrz * side;
+        while (ahead > 1.4 && waterDepth(tx, tz) > 0.2) {
+          ahead -= 0.5;
+          tx = player.pos.x + lfx * ahead + lrx * side;
+          tz = player.pos.z + lfz * ahead + lrz * side;
+        }
+        const dist = Math.hypot(tx - d.pos.x, tz - d.pos.z);
+        if (dist > 1.2) d.seated = false;
+        if (dist > 0.75 && d.sit < 0.5) {
+          d.steer(dt, tx, tz, dist > 4 ? d.cfg.run * 0.7 : 3);
+        } else {
+          d.speed = Math.max(0, d.speed - 12 * dt);
+          d.vel.set(0, 0, 0);
+          const face = Math.atan2(player.pos.x - d.pos.x, player.pos.z - d.pos.z);
+          d.heading += clamp(wrap(face - d.heading), -4 * dt, 4 * dt);
+          if (Math.abs(wrap(face - d.heading)) < 0.35) d.seated = true;
+        }
+        d.neckPitch += (d.b.rest - 0.1 - d.neckPitch) * Math.min(1, dt * 3);
       } else {
         // Sin tarea: con escopeta, buscan por delante; con rifle, van a tu lado.
         let tx, tz, sp;
@@ -205,8 +257,11 @@ export class DogPack {
         d.steer(dt, tx, tz, sp);
         d.neckPitch += ((d.speed > 3 ? d.b.rest + 0.15 : d.b.rest) - d.neckPitch) * Math.min(1, dt * 3);
       }
+      if (!waiting || d.task) d.seated = false;
+      d.sit = clamp(d.sit + (d.seated ? dt * 2.2 : -dt * 5), 0, 1);
       d.state = d.speed > 0.2 ? 'walk' : 'idle';
       d.animate(dt);
+      d.applySit();
       d.syncDog();
     }
   }
