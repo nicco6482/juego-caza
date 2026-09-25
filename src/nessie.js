@@ -75,6 +75,8 @@ export class Nessie {
     for (let i = 0; i < 60; i++) {
       const a = Math.random() * Math.PI * 2, r = LAKE.r * Math.random() * 0.6;
       const x = LAKE.x + Math.cos(a) * r, z = LAKE.z + Math.sin(a) * r;
+      // Lejos del galeón fondeado.
+      if (this.avoid && Math.hypot(x - this.avoid.x, z - this.avoid.z) < 22) continue;
       if (waterDepth(x, z) > 2) {
         this.pos.set(x, 0, z);
         this.heading = Math.random() * Math.PI * 2;

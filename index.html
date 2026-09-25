@@ -31,6 +31,40 @@
   <!-- HUD -->
   <div id="hud" class="hidden">
     <div id="markers"></div>
+    <div id="hit-tags"></div>
+    <div id="hit-card">
+      <div class="hc-title"></div>
+      <svg viewBox="0 0 240 130" aria-hidden="true">
+        <g class="hc-sil">
+          <path d="M38 58 Q40 40 70 40 L148 37 Q168 38 172 54 Q174 78 152 84 L64 86 Q40 84 38 58Z"/>
+          <path d="M150 44 L178 16 L192 24 L172 62Z"/>
+          <path d="M178 12 Q190 5 201 12 L224 25 Q227 31 219 34 L198 34 Q186 32 180 25Z"/>
+          <path d="M38 52 Q28 56 30 70 L36 66Z"/>
+          <rect x="56" y="80" width="8" height="44" rx="3"/><rect x="72" y="80" width="8" height="44" rx="3"/>
+          <rect x="140" y="80" width="8" height="44" rx="3"/><rect x="154" y="80" width="8" height="44" rx="3"/>
+        </g>
+        <ellipse class="hc-lungs" cx="131" cy="58" rx="17" ry="13"/>
+        <circle class="hc-heart" cx="143" cy="72" r="6"/>
+        <circle class="hc-ring" r="9"/>
+        <circle class="hc-dot" r="4"/>
+      </svg>
+      <div class="hc-zone"></div>
+    </div>
+    <div id="controls-panel">
+      <b>Controles <small>H oculta</small></b>
+      <dl>
+        <dt>W A S D</dt><dd>Moverse</dd>
+        <dt>Ratón</dt><dd>Mirar</dd>
+        <dt>Clic izq.</dt><dd>Disparar</dd>
+        <dt>Clic der. / F</dt><dd>Visor</dd>
+        <dt>B</dt><dd>Prismáticos</dd>
+        <dt>R</dt><dd>Recargar</dd>
+        <dt>1 – 5</dt><dd>Cambiar arma</dd>
+        <dt>Shift</dt><dd>Correr · aguantar aire</dd>
+        <dt>C / Z</dt><dd>Agacharse / tumbarse</dd>
+        <dt>Esc</dt><dd>Pausa</dd>
+      </dl>
+    </div>
     <div id="crosshair"></div>
 
     <div id="top">
@@ -117,6 +151,7 @@
             <dt>R</dt><dd>Recargar</dd>
             <dt>1 – 5</dt><dd>Cerrojo con visor · Palanca · Paralela · Superpuesta · Semiautomática</dd>
             <dt>Rueda / Q</dt><dd>Cambiar de arma (sin apuntar) / volver a la anterior</dd>
+            <dt>H</dt><dd>Mostrar u ocultar el panel de controles</dd>
             <dt>Esc</dt><dd>Pausa</dd>
           </dl>
         </section>

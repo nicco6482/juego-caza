@@ -63,12 +63,19 @@ export function clearAll() {
   save(cache);
 }
 
-// Crea y guarda la ficha de una pieza. `size` va de ~0.9 a ~1.1 (tamaño del individuo);
-// `cls` es la clase de edad (0 joven, 1 adulto, 2 viejo) para cuernas y cuernos.
-export function record({ key, name, size = 1, cls = 1, dist, zone, weapon, flying, note, penalty }) {
+// Peso de un ejemplar: el mismo que se ve en los prismáticos y el que queda en la ficha.
+export function weightOf(key, size = 1, cls = 1, r = Math.random()) {
   const T = TROPHY[key] || { kg: [1, 2] };
   const t = Math.min(1, Math.max(0, (size - 0.88) / 0.3));
-  const kg = T.kg[0] + (T.kg[1] - T.kg[0]) * (0.25 + t * 0.6 + Math.random() * 0.15) * (T.small ? 1 : 0.85 + cls * 0.1);
+  const kg = T.kg[0] + (T.kg[1] - T.kg[0]) * (0.25 + t * 0.6 + r * 0.15) * (T.small ? 1 : 0.85 + cls * 0.1);
+  return +kg.toFixed(T.small ? 2 : kg < 20 ? 1 : 0);
+}
+
+// Crea y guarda la ficha de una pieza. `size` va de ~0.9 a ~1.1 (tamaño del individuo);
+// `cls` es la clase de edad (0 joven, 1 adulto, 2 viejo) para cuernas y cuernos.
+export function record({ key, name, size = 1, cls = 1, dist, zone, weapon, flying, note, penalty, r }) {
+  const T = TROPHY[key] || { kg: [1, 2] };
+  const kg = weightOf(key, size, cls, r);
   const entry = {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     key, name, date: new Date().toISOString(),

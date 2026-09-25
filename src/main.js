@@ -10,6 +10,7 @@ import { DogPack } from './dogs.js';
 import { Birds } from './birds.js';
 import * as Trophies from './trophies.js';
 import { Nessie } from './nessie.js';
+import { PirateShip } from './ship.js';
 import { Hud } from './hud.js';
 import { createPost } from './post.js';
 import { loadModels } from './models.js';
@@ -57,6 +58,7 @@ const settings = {
   quality: store.get('sierra.quality', 'media'),
   showFps: store.get('sierra.fps', false),
   bulletCam: store.get('sierra.bulletcam', true),
+  controls: store.get('sierra.controls', true),
 };
 const QUALITY = {
   alta: {
@@ -91,7 +93,7 @@ scene.add(camera);
 
 const hud = new Hud();
 const sfx = new Sfx();
-let world, fauna, effects, rifle, post, water, birds, dogs, nessie;
+let world, fauna, effects, rifle, post, water, birds, dogs, nessie, ship;
 const views = {};
 
 const zeroAngles = ZEROS.map((d) => zeroAngle(d));
@@ -202,6 +204,7 @@ function boot() {
   world.grass.layers.set(1);
   camera.layers.enable(1);
   water = new Water(scene, quality, renderer, world);
+  ship = new PirateShip(scene);
   post = createPost(renderer, scene, camera, quality);
   effects = new Effects(scene);
   fauna = new Fauna(scene, {
@@ -277,6 +280,9 @@ function boot() {
       if (dist < 500) hud.feed('Algo enorme se mueve en el lago…', 'warn');
     },
   });
+  nessie.avoid = ship.anchor;
+  window.__ship = ship;
+  window.__depth = waterDepth;
 
   // Modelos 3D opcionales (si no hay, se usan los generados por código).
   loadModels().finally(() => {
@@ -315,7 +321,7 @@ function newHunt() {
   birds.populate(0, 0);
   Object.assign(game, {
     time: HUNT_TIME, score: 0, mag: MAG_SIZE, reserve: RESERVE, shots: 0, hits: 0, log: [], longest: 0,
-    boltT: 0, reloadT: 0, timeScale: 1, ended: false, weapon: 'rifle', switchT: 0,
+    boltT: 0, reloadT: 0, timeScale: 1, slowmo: 0, ended: false, weapon: 'rifle', switchT: 0,
     stash: {},
   });
   for (const v of Object.values(views)) v.group.visible = false;
@@ -323,6 +329,8 @@ function newHunt() {
   dogs.reset(player.pos.x, player.pos.z);
   nessie.reset();
   hud.weaponBar(WEAPON_ORDER.map((k) => WEAPONS[k].short), 0);
+  document.getElementById('controls-panel').classList.toggle('off', !settings.controls);
+  for (const h of hitTags.splice(0)) h.el.remove();
   wind.baseAngle = Math.random() * Math.PI * 2;
   wind.baseSpeed = 1.5 + Math.random() * 4.5;
   updateWind(0);
@@ -466,6 +474,12 @@ addEventListener('keydown', (e) => {
     case 'NumpadEnter':
       fire();
       break;
+    case 'KeyH': {
+      const panel = document.getElementById('controls-panel');
+      const off = panel.classList.toggle('off');
+      store.set('sierra.controls', !off);
+      break;
+    }
     case 'KeyB':
       player.binoc = !player.binoc;
       if (player.binoc) {
@@ -863,7 +877,8 @@ function resolveImpact(b, hit) {
     return;
   }
   if (hit.kind === 'animal') {
-    const res = hit.animal.hit(hit.zone);
+    const res = hit.animal.hit(hit.zone, b.origin.x, b.origin.z);
+    if (res !== 'dead') markWound(hit.animal, hit.point, hit.zone, res, b.pellet);
     effects.blood(hit.point, dirN.clone().multiplyScalar(0.6));
     for (let i = 0; i < 4; i++) effects.bloodDrop(hit.point.x + dirN.x * i * 0.4, hit.point.z + dirN.z * i * 0.4, 1.4);
     sfx.thud(delay, dist);
@@ -945,23 +960,31 @@ function onAnimalHit(animal, zone, dist, res, shot) {
   if (!sp.legal) {
     game.score -= sp.penalty;
     game.log.push({ name: sp.name, note: 'Protegida', dist, pts: -sp.penalty });
-    Trophies.record({ key: animal.key, name: sp.name, size: animal.scale / sp.scale, cls: animal.cls, dist, zone: 'Especie protegida', weapon: WEAPONS[game.weapon].name, penalty: true });
+    Trophies.record({ key: animal.key, name: sp.name, size: animal.scale / sp.scale, cls: animal.cls, r: animal.kgR, dist, zone: 'Especie protegida', weapon: WEAPONS[game.weapon].name, penalty: true });
     hud.banner(`¡${sp.name.toUpperCase()} ${sp.fem ? 'PROTEGIDA' : 'PROTEGIDO'}!`, `Sanción de la guardería · −${sp.penalty}`, 'bad');
     hud.feed(`Has abatido ${sp.fem ? 'una' : 'un'} ${sp.name.toLowerCase()}: −${sp.penalty}`, 'bad');
   } else {
     const z = ZONES[zone];
     let pts = Math.round(sp.points * z.mult + dist * 0.8);
     let note = z.label;
+    const perfect = !animal.wounded && (zone === 'corazon' || zone === 'cabeza') && shot === undefined;
     if (animal.wounded) {
       pts = Math.round(pts * 0.6);
       note = 'Remate';
+    } else if (perfect) {
+      pts = Math.round(pts * 1.25);
     }
     game.score += pts;
     game.longest = Math.max(game.longest, dist);
     game.log.push({ name: sp.name, note, dist, pts });
-    const trophy = Trophies.record({ key: animal.key, name: sp.name, size: animal.scale / sp.scale, cls: animal.cls, dist, zone: note, weapon: WEAPONS[game.weapon].name });
+    const trophy = Trophies.record({ key: animal.key, name: sp.name, size: animal.scale / sp.scale, cls: animal.cls, r: animal.kgR, dist, zone: note, weapon: WEAPONS[game.weapon].name });
     showTrophy(trophy);
-    hud.banner(`${sp.name.toUpperCase()} ${sp.fem ? 'ABATIDA' : 'ABATIDO'}`, `${note} · ${Math.round(dist)} m · +${pts}`, 'good');
+    if (perfect) {
+      hud.banner('¡TIRO PERFECTO!', `${sp.name} · ${note} · ${Math.round(dist)} m · +${pts}`, 'perfect');
+      sfx.perfect();
+      // Cámara lenta para ver la caída (si no está ya la cámara de bala).
+      if (!bulletCam.active) game.slowmo = 1.6;
+    } else hud.banner(`${sp.name.toUpperCase()} ${sp.fem ? 'ABATIDA' : 'ABATIDO'}`, `${note} · ${Math.round(dist)} m · +${pts}`, 'good');
     hud.feed(`${sp.name} · ${note} · ${Math.round(dist)} m · +${pts}`, 'good');
   }
   hud.setScore(game.score);
@@ -979,7 +1002,7 @@ function onBledOut(animal) {
     const pts = Math.round(sp.points * 0.4 + (animal.woundDist || 0) * 0.3);
     game.score += pts;
     game.log.push({ name: sp.name, note: 'Rastreo', dist: animal.woundDist || 0, pts });
-    showTrophy(Trophies.record({ key: animal.key, name: sp.name, size: animal.scale / sp.scale, cls: animal.cls, dist: animal.woundDist || 0, zone: 'Rastreo', weapon: WEAPONS[game.weapon].name }));
+    showTrophy(Trophies.record({ key: animal.key, name: sp.name, size: animal.scale / sp.scale, cls: animal.cls, r: animal.kgR, dist: animal.woundDist || 0, zone: 'Rastreo', weapon: WEAPONS[game.weapon].name }));
     hud.feed(`${sp.fem ? 'La' : 'El'} ${sp.name.toLowerCase()} ${sp.fem ? 'herida' : 'herido'} ha caído · rastreo · +${pts}`, 'warn');
   }
   hud.setScore(game.score);
@@ -1257,35 +1280,126 @@ function rangefind() {
 
 // ---------- Marcadores ----------
 const _proj = new THREE.Vector3();
+// ¿Se ve el animal desde aquí? El relieve lo tapa, y el bosque espeso también a partir de cierta distancia.
+// Se recalcula cada poco para no gastar.
+function lineOfSight(a) {
+  if (a.losT !== undefined && game.clock - a.losT < 0.4) return a.los;
+  const c = camera.position, tx = a.pos.x, ty = a.pos.y + 0.9 * a.scale, tz = a.pos.z;
+  const d = Math.hypot(tx - c.x, tz - c.z);
+  let ok = true, trees = 0;
+  const steps = Math.max(6, Math.ceil(d / 6));
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps, x = c.x + (tx - c.x) * t, z = c.z + (tz - c.z) * t, y = c.y + (ty - c.y) * t;
+    if (groundAt(x, z) > y + 0.2) {
+      ok = false;
+      break;
+    }
+    trees += forestAt(x, z) * (d / steps);
+  }
+  a.los = ok && trees < 28;
+  a.losT = game.clock;
+  return a.los;
+}
 function updateMarkers() {
   const list = [];
-  const now = game.clock;
-  const lookDir = camera.getWorldDirection(new THREE.Vector3());
+  const binoc = player.binoc && !bulletCam.active;
   for (const a of fauna.animals) {
     const d = a.pos.distanceTo(player.pos);
-    // Avistar con los prismáticos: basta con mirar al animal un momento.
-    if (player.binoc && a.alive && d < 800) {
-      _proj.set(a.pos.x, a.pos.y + 0.9 * a.scale, a.pos.z).sub(camera.position).normalize();
-      if (_proj.dot(lookDir) > Math.cos(THREE.MathUtils.degToRad(4.5))) {
-        if (a.spottedUntil < now) hud.feed(`Avistado: ${a.sp.name.toLowerCase()} a ${Math.round(d)} m${a.sp.legal ? '' : a.sp.fem ? ' (protegida)' : ' (protegido)'}`, a.sp.legal ? '' : 'bad');
-        a.spottedUntil = now + 45;
-      }
-    }
-    const spotted = a.alive && a.spottedUntil > now;
-    const trophy = !a.alive && a.killedByPlayer && d < 400;
-    if (!spotted && !trophy) continue;
+    // Con los prismáticos se rotulan todos los animales a la vista: nombre y peso, nada más.
+    const show = binoc ? a.alive && d < 520 && a.group.visible : !a.alive && a.killedByPlayer && d < 400;
+    if (!show) continue;
     _proj.set(a.pos.x, a.pos.y + (a.alive ? 1.9 : 0.9) * a.scale + 0.3, a.pos.z).project(camera);
     if (_proj.z > 1 || Math.abs(_proj.x) > 1.05 || Math.abs(_proj.y) > 1.05) continue;
+    // Solo lo que cae dentro de los dos círculos de los prismáticos y no lo tapa el monte.
+    if (binoc && (Math.abs(_proj.x) > 0.7 || Math.abs(_proj.y) > 0.85 || !lineOfSight(a))) continue;
     const x = (_proj.x * 0.5 + 0.5) * innerWidth, y = (-_proj.y * 0.5 + 0.5) * innerHeight;
-    let kind = a.sp.legal ? 'legal' : 'protected';
-    let sub = `${Math.round(d)} m`;
-    if (!a.alive) kind = 'dead';
-    else if (a.state === 'flee') sub += ' · huye';
-    else if (a.state === 'alert') sub += ' · alerta';
-    if (a.wounded && a.alive) sub += a.sp.fem ? ' · herida' : ' · herido';
-    list.push({ x, y, title: a.sp.name + (a.sp.legal ? '' : a.sp.fem ? ' · protegida' : ' · protegido'), sub, kind });
+    if (a.kg === undefined) a.kg = Trophies.weightOf(a.key, a.scale / a.sp.scale, a.cls, a.kgR);
+    const kind = !a.alive ? 'dead' : a.sp.legal ? 'legal' : 'protected';
+    list.push({ x, y, title: a.sp.name, sub: `${a.kg.toLocaleString('es-ES')} kg`, kind });
   }
   hud.setMarkers(list);
+}
+
+// ---------- Marca del impacto ----------
+// Cada impacto deja la herida en el animal, una etiqueta flotante sobre el punto exacto y una
+// ficha con la silueta y el sitio del disparo.
+const woundGeo = new THREE.SphereGeometry(1, 10, 8);
+const woundMat = new THREE.MeshStandardMaterial({ color: '#3a0605', roughness: 0.35, metalness: 0 });
+const ZONE_INFO = {
+  corazon: { icon: '❤', label: 'Corazón', cls: 'z-perfect' },
+  cabeza: { icon: '◎', label: 'Cabeza', cls: 'z-perfect' },
+  cuello: { icon: '✚', label: 'Cuello', cls: 'z-good' },
+  pulmones: { icon: '✚', label: 'Pulmones', cls: 'z-good' },
+  cuerpo: { icon: '✖', label: 'Cuerpo', cls: 'z-bad' },
+};
+// Posición de cada zona en la silueta de la ficha (x, y en el dibujo de 240×130).
+const CARD_SPOTS = { corazon: [143, 72], pulmones: [131, 58], cabeza: [203, 22], cuello: [174, 42] };
+const hitTags = [];
+
+function markWound(animal, point, zone, res, pellet) {
+  animal.group.updateMatrixWorld(true);
+  const local = animal.body.worldToLocal(point.clone());
+  if (!pellet) {
+    const w = new THREE.Mesh(woundGeo, woundMat);
+    w.position.copy(local);
+    w.scale.setScalar(0.045 / Math.max(0.3, animal.scale));
+    animal.body.add(w);
+  }
+  const info = ZONE_INFO[zone] || ZONE_INFO.cuerpo;
+  const perfect = res === 'kill' && !animal.wounded && (zone === 'corazon' || zone === 'cabeza') && !pellet;
+  const el = document.createElement('div');
+  el.className = `hit-tag ${perfect ? 'z-perfect' : res === 'kill' ? 'z-good' : 'z-bad'}`;
+  el.innerHTML = `<i>${info.icon}</i><b>${info.label}</b>${perfect ? '<em>Tiro perfecto</em>' : res === 'wound' ? '<em>Herido</em>' : ''}`;
+  document.getElementById('hit-tags').appendChild(el);
+  hitTags.push({ el, animal, local, t: 0 });
+  showHitCard(animal, zone, local, res, perfect);
+}
+
+function updateHitTags(dt) {
+  for (let i = hitTags.length - 1; i >= 0; i--) {
+    const h = hitTags[i];
+    h.t += dt;
+    if (h.t > 5) {
+      h.el.remove();
+      hitTags.splice(i, 1);
+      continue;
+    }
+    h.animal.group.updateMatrixWorld(true);
+    _proj.copy(h.local);
+    h.animal.body.localToWorld(_proj);
+    _proj.project(camera);
+    if (_proj.z > 1) {
+      h.el.style.opacity = 0;
+      continue;
+    }
+    const x = (_proj.x * 0.5 + 0.5) * innerWidth, y = (-_proj.y * 0.5 + 0.5) * innerHeight;
+    h.el.style.opacity = h.t > 4.2 ? String(Math.max(0, (5 - h.t) / 0.8)) : '1';
+    h.el.style.transform = `translate(${x}px, ${y}px)`;
+  }
+}
+
+let cardT = 0;
+function showHitCard(animal, zone, local, res, perfect) {
+  const b = animal.b;
+  let [x, y] = CARD_SPOTS[zone] || [40 + clamp(local.z / b.bl + 0.55, 0, 1) * 125, 90 - clamp((local.y - b.L) / (b.bh * 1.2), 0, 1) * 50];
+  // Pequeño desvío según dónde entró de verdad, para que no sea siempre el mismo punto.
+  x += clamp(local.z * 8, -4, 4);
+  y += clamp(-(local.y - (animal.b.L + b.bh * 0.3)) * 8, -4, 4);
+  const info = ZONE_INFO[zone] || ZONE_INFO.cuerpo;
+  const el = document.getElementById('hit-card');
+  el.className = `show ${perfect ? 'z-perfect' : res === 'kill' ? 'z-good' : 'z-bad'}`;
+  el.querySelector('.hc-title').textContent = perfect ? '¡Tiro perfecto!' : res === 'kill' ? 'Tiro mortal' : 'Pieza herida';
+  el.querySelector('.hc-zone').textContent = `${info.icon} ${info.label} · ${animal.sp.name}`;
+  const dot = el.querySelector('.hc-dot'), ring = el.querySelector('.hc-ring');
+  dot.setAttribute('cx', x);
+  dot.setAttribute('cy', y);
+  ring.setAttribute('cx', x);
+  ring.setAttribute('cy', y);
+  ring.classList.remove('pulse');
+  void ring.getBoundingClientRect();
+  ring.classList.add('pulse');
+  clearTimeout(cardT);
+  cardT = setTimeout(() => el.classList.remove('show'), 5000);
 }
 
 // ---------- Bucle principal ----------
@@ -1344,6 +1458,11 @@ function frame(now) {
   if (game.state === 'loading') return;
 
   const playing = game.state === 'playing';
+  if (game.slowmo > 0 && !bulletCam.active) {
+    game.slowmo -= realDt;
+    // Entra de golpe y sale suave.
+    game.timeScale = game.slowmo > 0 ? 0.28 + 0.72 * clamp(1 - game.slowmo / 0.5, 0, 1) : 1;
+  }
   const simDt = playing ? realDt * game.timeScale : game.state === 'menu' ? realDt : 0;
   game.clock += realDt;
   updatePerf(rawDt);
@@ -1399,6 +1518,7 @@ function frame(now) {
       hud.optic('');
     }
     updateMarkers();
+    updateHitTags(realDt);
 
     todTimer -= realDt;
     if (todTimer <= 0) {
@@ -1430,6 +1550,7 @@ function frame(now) {
   effects.update(simDt);
   world.update(realDt, camera, playing ? player.pos : camera.position, wind.speed);
   water.update(realDt, wind.speed, camera.position);
+  ship.update(realDt, wind, game.state === 'playing' ? clamp(1 - game.time / HUNT_TIME, 0, 1) : 0);
   hud.update(realDt);
   sfx.update(wind.speed);
   post.render(realDt);

@@ -177,6 +177,22 @@ export class Sfx {
     o.stop(t + 0.3);
   }
 
+  // Campanilla del tiro perfecto: dos notas limpias.
+  perfect() {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t0 = ctx.currentTime + 0.05;
+    [[880, 0], [1318.5, 0.12], [1760, 0.24]].forEach(([f, d]) => {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f, t0 + d);
+      const g = ctx.createGain();
+      this.env(g, t0 + d, 0.005, 0.16, 0.9);
+      o.connect(g).connect(this.out(0, 1, 0.6));
+      o.start(t0 + d);
+      o.stop(t0 + d + 1.2);
+    });
+  }
+
   ricochet(delay, dist, pan) {
     if (!this.ctx) return;
     const ctx = this.ctx, t = ctx.currentTime + delay;

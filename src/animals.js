@@ -618,6 +618,7 @@ export class Animal {
     this.group.rotation.order = 'YXZ';
     const s = this.sp.scale * (0.9 + Math.random() * 0.14) * (horned ? [0.88, 1, 1.08][this.cls] : 1);
     this.scale = s;
+    this.kgR = Math.random();
     this.group.scale.setScalar(s);
 
     const mk = (geo) => {
@@ -744,10 +745,17 @@ export class Animal {
   }
 
   // Devuelve 'kill', 'wound' o 'dead'.
-  hit(zone) {
+  hit(zone, fromX, fromZ) {
     if (!this.alive) return 'dead';
     if (ZONES[zone].kill || this.wounded) {
-      this.die();
+      // Cada impacto mortal cae a su manera: la cabeza y el cuello tumban en el sitio,
+      // el corazón hace dar una coz y una carrera corta, y los pulmones, unos pasos tambaleándose.
+      const mode = this.wounded ? 'tip' : zone === 'cabeza' || zone === 'cuello' ? 'drop' : zone === 'corazon' ? 'heart' : 'lungs';
+      if (mode === 'heart' || mode === 'lungs') {
+        // Arranca alejándose del tirador.
+        if (fromX !== undefined) this.heading = Math.atan2(this.pos.x - fromX, this.pos.z - fromZ) + (Math.random() - 0.5) * 1.2;
+      }
+      this.die(mode);
       return 'kill';
     }
     this.wounded = true;
@@ -756,10 +764,15 @@ export class Animal {
     return 'wound';
   }
 
-  die() {
+  die(mode = 'tip') {
     this.state = 'dead';
     this.deathT = 0;
     this.reactDelay = -1;
+    this.deathMode = mode;
+    this.runT = mode === 'heart' ? 1.6 + Math.random() * 1.6 : mode === 'lungs' ? 2.5 + Math.random() * 2.5 : 0;
+    this.wobble = Math.random() * 10;
+    // Sin animaciones de huida para los que no se mueven (cocodrilos en el agua, etc.).
+    if (this.sp.aquatic && waterDepth(this.pos.x, this.pos.z) > 0.3) this.deathMode = 'tip';
   }
 
   update(dt, ctx) {
@@ -1028,18 +1041,95 @@ export class Animal {
       this.syncTransform();
       return;
     }
-    const t = clamp(this.deathT / 0.75, 0, 1);
-    const e = t * t * (3 - 2 * t);
-    // Inercia: si iba corriendo, se desliza un poco al caer.
-    this.speed = Math.max(0, this.speed - 14 * dt);
-    this.pos.x += Math.sin(this.heading) * this.speed * dt;
-    this.pos.z += Math.cos(this.heading) * this.speed * dt;
+    const T = this.deathT, b = this.b, sp = this.sp;
+    const ease = (x) => {
+      const t = clamp(x, 0, 1);
+      return t * t * (3 - 2 * t);
+    };
+    const mode = this.deathMode || 'tip';
+    let fold = 0, roll = 0, kick = 0, pitch = 0, move = 0, headDown = 0;
+    if (mode === 'drop') {
+      // Se desploma: las patas ceden a la vez y luego queda de costado.
+      fold = ease(T / 0.25);
+      roll = ease((T - 0.5) / 0.7);
+      move = Math.max(0, this.speed - 14 * T);
+    } else if (mode === 'heart') {
+      // Coz con las patas traseras, carrera ciega y caída de bruces.
+      kick = T < 0.45 ? Math.sin(Math.PI * T / 0.45) : 0;
+      const end = 0.25 + this.runT;
+      const top = sp.run * 0.72;
+      if (T < end) move = top * clamp(0.4 + T * 2, 0, 1);
+      else {
+        const u = T - end;
+        move = Math.max(0, top * (1 - u / 0.45));
+        pitch = ease(u / 0.3) * (1 - ease((u - 0.7) / 0.5));
+        fold = ease((u - 0.1) / 0.4);
+        roll = ease((u - 0.8) / 0.7);
+      }
+      headDown = 0.4;
+    } else if (mode === 'lungs') {
+      // Encorvado, da unos pasos tambaleándose y se echa.
+      const end = this.runT;
+      if (T < end) move = sp.walk * 1.8 * clamp(T * 2, 0, 1) * (1 - T / end * 0.5);
+      else {
+        const u = T - end;
+        fold = ease(u / 0.9);
+        roll = ease((u - 1.4) / 1.0);
+      }
+      headDown = 0.8;
+    } else {
+      roll = ease(T / 0.75);
+      move = Math.max(0, this.speed - 14 * T);
+    }
+    // Desplazamiento (esquiva el agua y los límites en lugar de meterse).
+    if (move > 0.05) {
+      if (mode !== 'tip' && mode !== 'drop') this.heading += Math.sin(T * 3.1 + this.wobble) * 0.9 * this.speed / Math.max(1, sp.run) * 0.03 + Math.sin(T * 7 + this.wobble) * 0.012;
+      const nx = this.pos.x + Math.sin(this.heading) * move * dt, nz = this.pos.z + Math.cos(this.heading) * move * dt;
+      if (waterDepth(nx, nz) > 0.2 || Math.abs(nx) > PLAY_HALF - 5 || Math.abs(nz) > PLAY_HALF - 5 || slopeAt(nx, nz) > 0.7) {
+        this.heading += 2.5 * dt * (this.fallSide || 1);
+      } else {
+        this.pos.x = nx;
+        this.pos.z = nz;
+      }
+    }
+    this.speed = move;
+    this.vel.set(Math.sin(this.heading) * move, 0, Math.cos(this.heading) * move);
     this.syncTransform();
-    this.group.rotation.z = this.fallSide * e * 1.45;
-    this.group.position.y += this.b.bw * 0.4 * this.scale * e;
-    for (let i = 0; i < 4; i++) this.legs[i].rotation.x *= 1 - Math.min(1, dt * 4);
-    this.neck.rotation.x += (this.b.rest + 0.6 - this.neck.rotation.x) * Math.min(1, dt * 3);
-    this.body.position.y *= 0.9;
+    if (move > 0.3) {
+      this.neckPitch += (b.rest + headDown - this.neckPitch) * Math.min(1, dt * 4);
+      this.animate(dt);
+    } else {
+      for (let i = 0; i < 4; i++) this.legs[i].rotation.x *= 1 - Math.min(1, dt * 6);
+      this.body.rotation.x *= 1 - Math.min(1, dt * 6);
+      this.body.position.y *= 1 - Math.min(1, dt * 6);
+      this.neck.rotation.x += (b.rest + 0.3 + fold * 0.6 - this.neck.rotation.x) * Math.min(1, dt * 3);
+    }
+    // Coz: patas traseras hacia atrás y arriba, grupa alzada.
+    if (kick > 0) {
+      this.legs[2].rotation.x += kick * 1.3;
+      this.legs[3].rotation.x += kick * 1.1;
+      this.body.rotation.x += kick * 0.28;
+      this.body.position.y += kick * 0.12;
+    }
+    // De bruces: las manos se doblan primero y el pecho da contra el suelo.
+    if (pitch > 0) {
+      this.body.rotation.x += pitch * 0.32;
+      this.legs[0].rotation.x = this.legs[0].rotation.x * (1 - pitch) - 1.2 * pitch;
+      this.legs[1].rotation.x = this.legs[1].rotation.x * (1 - pitch) - 1.2 * pitch;
+    }
+    // Patas recogidas bajo el cuerpo (echado) y, después, de costado con las patas estiradas.
+    if (fold > 0) {
+      const lie = fold * (1 - roll);
+      for (let i = 0; i < 4; i++) {
+        const tuck = i < 2 ? -1.35 : 1.35;
+        this.legs[i].rotation.x += (tuck * (1 - roll) + 0.15 * roll - this.legs[i].rotation.x) * fold;
+      }
+      this.body.position.y = this.body.position.y * (1 - fold) - b.L * 0.8 * lie;
+      this.neck.rotation.x += (b.graze - 0.2 - this.neck.rotation.x) * lie * 0.5;
+    }
+    this.group.rotation.z = this.fallSide * roll * 1.45;
+    this.group.position.y += b.bw * 0.4 * this.scale * roll;
+    if (roll > 0) this.neck.rotation.x += (b.rest + 0.6 - this.neck.rotation.x) * Math.min(1, dt * 3) * roll;
   }
 
   // Comprueba si el segmento a->b alcanza a este animal. `ahead` extrapola su movimiento.
@@ -1287,7 +1377,7 @@ export class Fauna {
       // Los animales lejanos se actualizan menos veces por segundo: no se nota y ahorra mucho.
       a.acc = (a.acc || 0) + dt;
       const every = d > 250 ? 0.2 : d > 140 ? 0.066 : 0;
-      if ((a.alive || a.deathT < 3) && a.acc >= every) {
+      if ((a.alive || a.deathT < 9) && a.acc >= every) {
         a.update(Math.min(a.acc, 0.25), ctx);
         a.acc = 0;
       }
