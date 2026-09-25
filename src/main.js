@@ -212,7 +212,7 @@ function boot() {
       hud.banner('¡TE HA EMBESTIDO!', `${a.sp.name}: el animal más peligroso del monte`, 'bad');
       sfx.thud(0, 2);
       player.recoil += 0.3;
-      setTimeout(() => endHunt(`Te ha embestido un ${a.sp.name.toLowerCase()}.`), 1500);
+      setTimeout(() => endHunt(`Te ha embestido ${a.sp.fem ? 'una' : 'un'} ${a.sp.name.toLowerCase()}.`), 1500);
     },
     onRoar: (a) => {
       if (game.state !== 'playing') return;
@@ -330,8 +330,8 @@ function newHunt() {
   hud.setScore(0);
   hud.setStance('stand');
   refreshAmmo();
-  hud.feed('Temporada abierta: ciervo, gamo, corzo, jabalí, muflón, cabra montés, búfalo, elefante, hipopótamo, cocodrilo, zorro y liebre.');
-  hud.feed('¡Ojo! Búfalos, elefantes e hipopótamos pueden embestir, y los cocodrilos del lago se lanzan si te acercas.', 'warn');
+  hud.feed('Temporada abierta: ciervo, gamo, corzo, jabalí, muflón, cabra montés, búfalo, elefante, hipopótamo, cocodrilo, león, zorro y liebre.');
+  hud.feed('¡Ojo! Búfalos, elefantes, hipopótamos y leones pueden embestir, y los cocodrilos del lago se lanzan si te acercas. Los leones beben en la orilla del lago.', 'warn');
   hud.feed('Protegidos: la cierva, el lobo ibérico y el gorila.', 'bad');
   hud.feed('Es época de berrea: escucha a los ciervos para saber dónde están.');
   hud.feed('Caza menor: perdiz, tórtola, zorzal, agachadiza y ánade. Con escopeta (3, 4 o 5) te entran al vuelo.');

@@ -25,6 +25,8 @@ const TROPHY = {
   flamenco: { kg: [2.5, 4], small: true },
   bufalo: { measure: 'puntos SCI', base: 100, perClass: 8, spread: 6, medals: [100, 108, 116], kg: [500, 850] },
   gorila: { kg: [120, 200] },
+  leon: { measure: 'puntos SCI', base: 24.2, perClass: 0.6, spread: 1.0, medals: [24, 25, 26], kg: [160, 230], decimals: 2 },
+  leona: { kg: [110, 160] },
   nessie: { measure: 'metros', base: 14, perClass: 0, spread: 1.5, medals: [1, 1, 1], kg: [9000, 14000], decimals: 1 },
   elefante: { measure: 'libras de marfil', base: 62, perClass: 0, spread: 10, medals: [60, 75, 90], kg: [4000, 6200] },
   hipopotamo: { measure: 'puntos SCI', base: 62, perClass: 0, spread: 5, medals: [60, 65, 70], kg: [1300, 2200] },

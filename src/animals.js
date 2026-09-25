@@ -76,7 +76,7 @@ export const SPECIES = {
     col: { body: '#77716b', dark: '#4d4844', light: '#8a847e', rump: '#77716b', nose: '#5a5550', tusk: '#efe6d0' },
   },
   hipopotamo: {
-    name: 'Hipopótamo', legal: true, points: 300, scale: 1.0, build: 'hippo', dangerous: true, aquatic: true,
+    name: 'Hipopótamo', legal: true, points: 300, scale: 1.0, build: 'hippo', dangerous: true, aquatic: true, shore: true, drinker: true,
     walk: 0.9, run: 8, hearing: 40, sight: 40, smell: 90,
     col: { body: '#6f5c5b', dark: '#4a3c3c', light: '#b58a86', rump: '#6f5c5b', nose: '#8a6a68', tusk: '#efe6d0' },
   },
@@ -84,6 +84,16 @@ export const SPECIES = {
     name: 'Cocodrilo', legal: true, points: 280, scale: 1.0, build: 'croc', dangerous: true, aquatic: true, lunge: 15,
     walk: 0.7, run: 6, hearing: 30, sight: 35, smell: 60,
     col: { body: '#4b5236', dark: '#2b3020', light: '#a79e6f', rump: '#4b5236', nose: '#3a4029' },
+  },
+  leon: {
+    name: 'León', legal: true, points: 380, scale: 1.0, build: 'cat', mane: true, dangerous: true, drinker: true,
+    walk: 1.1, run: 13, hearing: 55, sight: 80, smell: 90,
+    col: { body: '#b98a4e', dark: '#5a3a1e', light: '#e6d3ab', rump: '#b98a4e', nose: '#4a2e22', mane: '#5b3518' },
+  },
+  leona: {
+    name: 'Leona', fem: true, legal: true, points: 240, scale: 0.88, build: 'cat', dangerous: true, drinker: true,
+    walk: 1.1, run: 14, hearing: 55, sight: 85, smell: 90,
+    col: { body: '#c09456', dark: '#6a4524', light: '#ead9b4', rump: '#c09456', nose: '#4a2e22' },
   },
   gorila: {
     name: 'Gorila', legal: false, penalty: 600, scale: 1.0, build: 'ape',
@@ -134,6 +144,7 @@ const BUILDS = {
   dog: { L: 0.62, bl: 1.0, bh: 0.42, bw: 0.3, neckLen: 0.28, neckR: 0.1, hs: 0.16, snout: 0.21, rest: 0.72, graze: 1.7 },
   dachs: { L: 0.3, bl: 1.08, bh: 0.4, bw: 0.3, neckLen: 0.24, neckR: 0.1, hs: 0.17, snout: 0.24, rest: 0.78, graze: 1.7 },
   podenco: { L: 0.7, bl: 0.95, bh: 0.38, bw: 0.26, neckLen: 0.32, neckR: 0.085, hs: 0.14, snout: 0.23, rest: 0.55, graze: 1.7 },
+  cat: { L: 0.64, bl: 1.55, bh: 0.58, bw: 0.48, neckLen: 0.26, neckR: 0.19, hs: 0.26, snout: 0.15, rest: 0.55, graze: 1.75 },
   hare: { L: 0.36, bl: 0.95, bh: 0.4, bw: 0.3, neckLen: 0.12, neckR: 0.11, hs: 0.16, snout: 0.13, rest: 1.05, graze: 1.75 },
 };
 
@@ -178,6 +189,9 @@ const sm = (a, b, x) => {
 
 // Perfiles anatómicos: secciones [z, y relativa al lomo, semiancho, semialto].
 const TORSO = {
+  get cat() {
+    return this.wolf.map(([z, dy, w, h]) => [z * 1.18, dy, w * 1.3, h * 1.25]);
+  },
   deer: [[-0.8, 0.07, 0.02, 0.02], [-0.77, 0.06, 0.13, 0.15], [-0.68, 0.04, 0.2, 0.25], [-0.5, 0.02, 0.235, 0.3], [-0.25, -0.01, 0.235, 0.29],
     [0.0, 0.0, 0.24, 0.3], [0.25, 0.03, 0.225, 0.33], [0.45, 0.06, 0.185, 0.31], [0.58, 0.14, 0.13, 0.2], [0.62, 0.2, 0.02, 0.02]],
   boar: [[-0.7, 0.05, 0.02, 0.02], [-0.66, 0.04, 0.16, 0.2], [-0.55, 0.03, 0.25, 0.3], [-0.3, 0.02, 0.29, 0.34], [0.0, 0.05, 0.3, 0.37],
@@ -306,6 +320,12 @@ function buildGeometry(key, cls = 1) {
     const tailSecs = subdivide([[0.0, -0.62, 0.05, 0.05], [-0.1, -0.78, 0.075, 0.08], [-0.28, -0.93, 0.08, 0.085], [-0.45, -1.02, 0.06, 0.065],
       [-0.52, -1.05, 0.01, 0.01]].map(([dy, z, w, h]) => ({ p: [0, by + dy, z], w, h })), 3);
     torso.push(loft(tailSecs, [0, 1, 0], 14, (t) => mixc(C.body, C.dark, sm(0.7, 0.85, t)), 2));
+  } else if (build === 'cat') {
+    // Cola larga y fina que cuelga, con el pincel negro en la punta.
+    const tailSecs = subdivide([[0.02, -0.78, 0.045, 0.045], [-0.2, -0.92, 0.035, 0.035], [-0.42, -0.98, 0.03, 0.03], [-0.55, -0.95, 0.028, 0.028],
+      [-0.6, -0.9, 0.01, 0.01]].map(([dy, z, w, h]) => ({ p: [0, by + dy, z], w, h })), 3);
+    torso.push(loft(tailSecs, [0, 1, 0], 10, () => C.body, 2));
+    torso.push(P(sphere, sp.col.dark, [0, by - 0.6, -0.91], [0.4, 0, 0], [0.05, 0.08, 0.05]));
   } else if (build === 'fox') {
     const tailSecs = subdivide([[0.02, -0.66, 0.05, 0.05], [-0.02, -0.85, 0.1, 0.11], [-0.1, -1.05, 0.13, 0.14], [-0.2, -1.22, 0.11, 0.12],
       [-0.27, -1.36, 0.05, 0.06], [-0.3, -1.42, 0.01, 0.01]].map(([dy, z, w, h]) => ({ p: [0, by + dy, z], w, h })), 3);
@@ -334,8 +354,8 @@ function buildGeometry(key, cls = 1) {
     g.applyMatrix4(hm);
     return g;
   };
-  const mw = { deer: 0.8, boar: 0.95, fox: 0.6, sheep: 0.85, wolf: 0.7, hare: 0.8, dog: 0.78, dachs: 0.7, podenco: 0.6, bovine: 0.95, ape: 0.95, elephant: 0.8, hippo: 1.4, croc: 0.9 }[build];
-  const mh = { deer: 0.85, boar: 0.85, fox: 0.6, sheep: 0.9, wolf: 0.68, hare: 0.85, dog: 0.8, dachs: 0.72, podenco: 0.6, bovine: 0.85, ape: 0.85, elephant: 0.8, hippo: 0.9, croc: 0.42 }[build];
+  const mw = { deer: 0.8, boar: 0.95, fox: 0.6, sheep: 0.85, wolf: 0.7, hare: 0.8, dog: 0.78, dachs: 0.7, podenco: 0.6, bovine: 0.95, ape: 0.95, elephant: 0.8, hippo: 1.4, croc: 0.9, cat: 0.95 }[build];
+  const mh = { deer: 0.85, boar: 0.85, fox: 0.6, sheep: 0.9, wolf: 0.68, hare: 0.85, dog: 0.8, dachs: 0.72, podenco: 0.6, bovine: 0.85, ape: 0.85, elephant: 0.8, hippo: 0.9, croc: 0.42, cat: 0.8 }[build];
   const snoutEnd = hs * 0.3 + snout;
   const headSecs = subdivide([
     [-hs * 0.55, hs * 0.25, 0.01, 0.01], [-hs * 0.45, hs * 0.28, hs * 0.5, hs * 0.55], [-hs * 0.12, hs * 0.32, hs * 0.64, hs * 0.64],
@@ -348,7 +368,7 @@ function buildGeometry(key, cls = 1) {
     if (build === 'deer') col = mixc(col, C.light, sm(hs * 0.2, hs * 0.5, v.z) * sm(-0.3, -0.8, s) * 0.8);
     if (build === 'fox') col = mixc(col, C.light, sm(0.0, hs * 0.3, v.z) * sm(0.0, -0.5, s));
     if (build === 'boar') col = mixc(col, C.dark, 0.3);
-    if (build === 'wolf') col = mixc(col, C.light, sm(0.0, hs * 0.3, v.z) * sm(0.0, -0.6, s) * 0.8);
+    if (build === 'wolf' || build === 'cat') col = mixc(col, C.light, sm(0.0, hs * 0.3, v.z) * sm(0.0, -0.6, s) * 0.8);
     if (build === 'podenco') col = mixc(col, C.light, sm(hs * 0.3, hs * 0.6, v.z) * sm(0.2, -0.4, s) + (1 - sm(0.08, 0.2, Math.abs(c))) * sm(0.3, 0.7, s) * 0.8);
     if (key === 'muflon') col = mixc(col, C.light, sm(hs * 0.25, hs * 0.5, v.z));
     if (key === 'cabra') col = mixc(col, C.dark, sm(hs * 0.1, hs * 0.4, v.z) * 0.6);
@@ -359,7 +379,7 @@ function buildGeometry(key, cls = 1) {
   for (const sx of [-1, 1]) {
     neck.push(H(P(sphere, '#0b0908', [sx * hs * 0.5, hs * 0.44, hs * 0.16], [0, 0, 0], [hs * 0.13, hs * 0.13, hs * 0.13])));
   }
-  const earLen = { fox: hs * 1.15, wolf: hs * 0.8, boar: hs * 0.75, sheep: hs * 0.85, hare: hs * 2.6, dog: hs * 1.0, dachs: hs * 1.1, podenco: hs * 1.5, bovine: hs * 0.75, ape: hs * 0.35, elephant: hs * 0.2, hippo: hs * 0.35, croc: hs * 0.1 }[build] ?? hs * 1.3;
+  const earLen = { fox: hs * 1.15, wolf: hs * 0.8, boar: hs * 0.75, sheep: hs * 0.85, hare: hs * 2.6, dog: hs * 1.0, dachs: hs * 1.1, podenco: hs * 1.5, bovine: hs * 0.75, ape: hs * 0.35, elephant: hs * 0.2, hippo: hs * 0.35, croc: hs * 0.1, cat: hs * 0.4 }[build] ?? hs * 1.3;
   for (const sx of [-1, 1]) {
     if (build === 'dog' || build === 'dachs') {
       // Orejas caídas junto a la cara.
@@ -406,6 +426,13 @@ function buildGeometry(key, cls = 1) {
         neck.push(H(P(new THREE.ConeGeometry(0.012, 0.04, 4), '#e9e3cf', [sx * hs * 0.34, -hs * 0.12, hs * 0.4 + i * snout * 0.1], [Math.PI, 0, 0])));
       }
     }
+  }
+  if (sp.mane) {
+    // Melena del león: rodea la cabeza y baja por el cuello hasta el pecho.
+    neck.push(P(sphere, sp.col.mane, [0, neckLen * 0.45, -0.02], [0, 0, 0], [neckR * 2.1, neckLen * 1.05, neckR * 2.3]));
+    neck.push(P(sphere, sp.col.mane, [0, -neckR * 0.4, 0.06], [0, 0, 0], [neckR * 1.8, neckR * 1.8, neckR * 1.7]));
+    neck.push(H(P(sphere, sp.col.mane, [0, hs * 0.25, -hs * 0.35], [0, 0, 0], [hs * 1.25, hs * 1.3, hs * 0.95])));
+    neck.push(H(P(sphere, sp.col.dark, [0, hs * 0.1, -hs * 0.55], [0, 0, 0], [hs * 1.15, hs * 1.2, hs * 0.8])));
   }
   if (build === 'ape') {
     // Cresta sagital del macho y arcos de las cejas.
@@ -532,7 +559,7 @@ function buildGeometry(key, cls = 1) {
 
   // --- Patas (pivote en la cadera) ---
   const k = L / 0.92;
-  const th = { deer: 1, boar: 1.55, fox: 0.85, sheep: 1.15, wolf: 1.3, hare: 1.1, dog: 0.95, dachs: 1.5, podenco: 0.72, bovine: 2.0, ape: 2.1, elephant: 3.6, hippo: 3.0, croc: 1.6 }[build];
+  const th = { deer: 1, boar: 1.55, fox: 0.85, sheep: 1.15, wolf: 1.3, hare: 1.1, dog: 0.95, dachs: 1.5, podenco: 0.72, bovine: 2.0, ape: 2.1, elephant: 3.6, hippo: 3.0, croc: 1.6, cat: 1.55 }[build];
   const legCol = (t) => {
     let col = mixc(C.body, C.dark, sm(0.45, 0.8, t) * (build === 'fox' ? 0.9 : 0.35));
     if (key === 'muflon') col = mixc(col, C.light, sm(0.4, 0.6, t));
@@ -785,7 +812,7 @@ export class Animal {
     }
 
     // Berrea: los machos de ciervo braman de vez en cuando si están tranquilos.
-    if ((this.sp.antlers === 'stag' || this.key === 'lobo') && this.state !== 'flee' && this.onRoar) {
+    if ((this.sp.antlers === 'stag' || this.key === 'lobo' || this.key === 'leon') && this.state !== 'flee' && this.onRoar) {
       this.roarT = (this.roarT ?? 8 + Math.random() * 40) - dt;
       if (this.roarT <= 0) {
         this.roarT = 25 + Math.random() * 45;
@@ -906,6 +933,13 @@ export class Animal {
 
   pickIdle() {
     const r = Math.random();
+    // Leones e hipopótamos en la orilla: casi siempre bebiendo, con poco paseo.
+    if (this.sp.drinker && this.herd && this.herd.shore) {
+      if (r < 0.15) this.pickWalk(8);
+      else if (r < 0.85) this.setState('graze', 6 + Math.random() * 12);
+      else this.setState('idle', 3 + Math.random() * 4);
+      return;
+    }
     if (r < 0.45) this.pickWalk(18);
     else if (r < 0.75) this.setState('graze', 4 + Math.random() * 10);
     else this.setState('idle', 2 + Math.random() * 4);
@@ -916,7 +950,8 @@ export class Animal {
     for (let i = 0; i < 6; i++) {
       const x = a.x + (Math.random() - 0.5) * 2 * radius;
       const z = a.z + (Math.random() - 0.5) * 2 * radius;
-      if (slopeAt(x, z) < 0.45 && (this.sp.aquatic || waterDepth(x, z) < 0.05)) {
+      const wd = waterDepth(x, z);
+      if (slopeAt(x, z) < 0.45 && (this.sp.shore ? wd < 0.3 : this.sp.aquatic || wd < 0.05)) {
         this.target.set(clamp(x, -PLAY_HALF + 30, PLAY_HALF - 30), 0, clamp(z, -PLAY_HALF + 30, PLAY_HALF - 30));
         break;
       }
@@ -1067,7 +1102,7 @@ class Herd {
 
   update(dt) {
     this.driftTimer -= dt;
-    if (this.driftTimer <= 0) {
+    if (this.driftTimer <= 0 && !this.shore) {
       this.driftTimer = 35 + Math.random() * 40;
       const a = Math.random() * Math.PI * 2;
       const nx = clamp(this.anchor.x + Math.sin(a) * 40, -PLAY_HALF + 40, PLAY_HALF - 40);
@@ -1106,6 +1141,12 @@ const HERD_TYPES = {
   hipopotamos: () => Array.from({ length: 2 + Math.floor(Math.random() * 4) }, () => 'hipopotamo'),
   cocodrilos: () => Array.from({ length: 1 + Math.floor(Math.random() * 2) }, () => 'cocodrilo'),
   bufalos: () => Array.from({ length: 4 + Math.floor(Math.random() * 6) }, () => 'bufalo'),
+  leones: () => {
+    const list = ['leon'];
+    if (Math.random() < 0.3) list.push('leon');
+    for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) list.push('leona');
+    return list;
+  },
   gorilas: () => Array.from({ length: 3 + Math.floor(Math.random() * 4) }, () => 'gorila'),
 };
 
@@ -1179,6 +1220,32 @@ export class Fauna {
     }
   }
 
+  // En la misma orilla, con las patas casi en el agua: hipopótamos fuera del agua y leones bebiendo.
+  spawnOnShore(type, lake, seed) {
+    for (let k = 0; k < 90; k++) {
+      const a = seed + k * 0.37;
+      for (let r = lake.r * 0.7; r < lake.r * 1.5; r += 1.5) {
+        const x = lake.x + Math.cos(a) * r, z = lake.z + Math.sin(a) * r;
+        const d = waterDepth(x, z);
+        if (d < -0.1 && d > -0.8 && slopeAt(x, z) < 0.3 && !this.herds.some((h) => Math.hypot(h.anchor.x - x, h.anchor.z - z) < 14)) {
+          this.spawnHerd(type, 0, 0, 0, 0, [x, z]);
+          const herd = this.herds[this.herds.length - 1];
+          herd.shore = true;
+          // De cara al agua, con la cabeza baja.
+          for (const an of herd.members) {
+            let [bx, bz] = [x + (Math.random() - 0.5) * 7, z + (Math.random() - 0.5) * 7];
+            if (waterDepth(bx, bz) > 0.2) [bx, bz] = [x, z];
+            an.pos.set(bx, groundAt(bx, bz), bz);
+            an.heading = an.desired = Math.atan2(lake.x - bx, lake.z - bz) + (Math.random() - 0.5) * 0.6;
+            an.setState('graze', 3 + Math.random() * 10);
+            an.syncTransform();
+          }
+          return;
+        }
+      }
+    }
+  }
+
   // Hipopótamos y cocodrilos, en el agua del lago.
   spawnInWater(type, lake) {
     for (let k = 0; k < 80; k++) {
@@ -1195,8 +1262,8 @@ export class Fauna {
   spawnInitial(px, pz, lake) {
     if (lake) {
       this.spawnLakeHerds(lake);
-      this.spawnInWater('hipopotamos', lake);
-      this.spawnInWater('hipopotamos', lake);
+      for (let i = 0; i < 3; i++) this.spawnOnShore('hipopotamos', lake, 1 + i * 2.1);
+      for (let i = 0; i < 3; i++) this.spawnOnShore('leones', lake, 2 + i * 2.1);
       for (let i = 0; i < 3; i++) this.spawnInWater('cocodrilos', lake);
     }
     const plan = {
