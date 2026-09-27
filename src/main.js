@@ -1645,6 +1645,7 @@ function frame(now) {
   ship.update(realDt, wind, game.state === 'playing' ? clamp(1 - game.time / HUNT_TIME, 0, 1) : 0);
   hud.update(realDt);
   sfx.update(wind.speed);
+  if (game.state === 'playing' && sfx.ctx && sfx.ctx.state !== 'running' && !document.hidden) sfx.wake();
   if (game.state === 'playing') {
     sfx.listen(camera);
     updateSoundscape(realDt);
@@ -1661,6 +1662,11 @@ addEventListener('resize', () => {
 
 // ---------- Menús ----------
 document.getElementById('btn-start').addEventListener('click', startHunt);
+// Cualquier clic o tecla despierta el audio si el navegador lo había dormido.
+for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => sfx.wake(), { passive: true });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) sfx.wake();
+});
 let trophiesBack = 'menu';
 const openTrophies = (from) => {
   trophiesBack = from;

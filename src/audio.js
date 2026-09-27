@@ -17,15 +17,23 @@ export class Sfx {
     if (!AC) return;
     const ctx = (this.ctx = new AC());
     this.master = ctx.createGain();
-    this.master.gain.value = 0.8;
-    this.master.connect(ctx.destination);
+    this.master.gain.value = 0.7;
+    // Limitador final: pase lo que pase, la salida nunca satura.
+    this.limiter = ctx.createDynamicsCompressor();
+    this.limiter.threshold.value = -3;
+    this.limiter.knee.value = 0;
+    this.limiter.ratio.value = 20;
+    this.limiter.attack.value = 0.002;
+    this.limiter.release.value = 0.12;
+    this.master.connect(this.limiter).connect(ctx.destination);
+    this.slots = [];
     // Todo pasa por un compresor suave: los disparos pegan fuerte sin saturar y lo lejano se oye.
     this.bus = ctx.createDynamicsCompressor();
-    this.bus.threshold.value = -20;
-    this.bus.knee.value = 12;
-    this.bus.ratio.value = 3.5;
-    this.bus.attack.value = 0.004;
-    this.bus.release.value = 0.25;
+    this.bus.threshold.value = -16;
+    this.bus.knee.value = 10;
+    this.bus.ratio.value = 2.5;
+    this.bus.attack.value = 0.006;
+    this.bus.release.value = 0.35;
     this.bus.connect(this.master);
     this.listener = { x: 0, y: 0, z: 0 };
 
@@ -125,6 +133,11 @@ export class Sfx {
     this.waterWave = { gain: { setTargetAtTime() {} } };
   }
 
+  // Si el navegador suspende el audio (cambio de pestaña, ahorro de energía), se reanuda.
+  wake() {
+    if (this.ctx && this.ctx.state !== 'running') this.ctx.resume().catch(() => {});
+  }
+
   get ready() {
     return !!this.ctx;
   }
@@ -167,7 +180,7 @@ export class Sfx {
     lp.frequency.setValueAtTime(shotgun ? 8000 : 6000, t);
     lp.frequency.exponentialRampToValueAtTime(shotgun ? 500 : 300, t + (shotgun ? 0.25 : 0.35));
     const g = ctx.createGain();
-    this.env(g, t, 0.002, 1.4, 0.45);
+    this.env(g, t, 0.002, 1.0, 0.45);
     n.connect(lp).connect(g).connect(dest);
     n.start(t);
     n.stop(t + 0.6);
@@ -622,9 +635,26 @@ export class Sfx {
     return Math.hypot(x - L.x, y - L.y, z - L.z);
   }
 
+  // Presupuesto de voces: si ya suenan muchas a la vez, las nuevas lejanas se omiten.
+  // Así el audio nunca se atasca (que era lo que hacía crujir y cortarse el sonido).
+  claim(dur, d = 0) {
+    if (!this.ctx) return false;
+    const now = this.ctx.currentTime;
+    this.slots = this.slots.filter((e) => e > now);
+    const max = d < 40 ? 14 : 9;
+    if (this.slots.length >= max) return false;
+    this.slots.push(now + dur);
+    return true;
+  }
+
   // Devuelve la entrada de una fuente situada en (x, y, z).
   at(x, y, z, vol = 1, rev = 0.3) {
     const ctx = this.ctx;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+      x = this.listener.x;
+      y = this.listener.y;
+      z = this.listener.z;
+    }
     const d = this.distTo(x, y, z);
     const g = ctx.createGain();
     g.gain.value = vol;
@@ -632,7 +662,8 @@ export class Sfx {
     lp.type = 'lowpass';
     lp.frequency.value = Math.max(700, 16000 * Math.exp(-d / 180));
     const p = ctx.createPanner();
-    p.panningModel = 'HRTF';
+    // 'equalpower' es mucho más ligero que HRTF y con cascos se ubica igual de bien.
+    p.panningModel = 'equalpower';
     p.distanceModel = 'inverse';
     p.refDistance = 6;
     p.rolloffFactor = 1.15;
@@ -708,6 +739,7 @@ export class Sfx {
     if (!this.ctx) return;
     const d = this.distTo(x, y, z);
     if (d > 220) return;
+    if (!this.claim(2.5, d)) return;
     if (this.playRec(kind, x, y, z, vol)) return;
     const ctx = this.ctx, t = ctx.currentTime + d / 343 + 0.02;
     // Cada ejemplar canta un poco distinto: tono, fuerza y ritmo.
@@ -806,6 +838,7 @@ export class Sfx {
     if (!this.ctx) return;
     const d = this.distTo(x, y, z);
     if (d > 1400) return;
+    if (!this.claim(key === 'leon' ? 6.5 : key === 'ciervo' ? 5 : 3, d * 0.5)) return;
     if (this.playRec(key, x, y, z, vol)) return;
     const ctx = this.ctx, t = ctx.currentTime + Math.min(3, d / 343) + 0.02;
     const dest = this.at(x, y, z, vol * 0.85, 0.55);
@@ -839,7 +872,7 @@ export class Sfx {
         v.stop(tt + len);
       }
       // Aire de la respiración, que es lo que hace que suene a bicho y no a sintetizador.
-      this.noiseBurst(tt, len, fm, g * 0.9, forms[0][0] * 1.1, 0.7);
+      this.noiseBurst(tt, len, fm, g * 0.6, forms[0][0] * 1.1, 0.7);
     };
     switch (key) {
       case 'ciervo': {
@@ -962,7 +995,7 @@ export class Sfx {
     this.waterOut = ctx.createGain();
     this.waterOut.gain.value = 0;
     this.waterPan = ctx.createPanner();
-    this.waterPan.panningModel = 'HRTF';
+    this.waterPan.panningModel = 'equalpower';
     this.waterPan.distanceModel = 'linear';
     this.waterPan.refDistance = 1;
     this.waterPan.maxDistance = 10000;
@@ -984,7 +1017,7 @@ export class Sfx {
 
   // near: 0 (lejos) a 1 (en la orilla); (x, y, z): punto de agua más cercano.
   water(near, x, y, z, dt, wading = false) {
-    if (!this.ctx) return;
+    if (!this.ctx || !Number.isFinite(near) || !Number.isFinite(x) || !Number.isFinite(z)) return;
     const t = this.ctx.currentTime;
     this.waterPhase += dt;
     const p = this.waterPan;
@@ -1011,6 +1044,7 @@ export class Sfx {
   }
 
   plop(x, y, z, vol = 0.5, small = false) {
+    if (!this.claim(0.3, 30)) return;
     const t = this.ctx.currentTime;
     const dest = this.at(x, y, z, vol, 0.3);
     // Gota: burbuja que sube de tono rápido.
@@ -1020,6 +1054,7 @@ export class Sfx {
   }
 
   frog(x, y, z) {
+    if (!this.claim(1, 30)) return;
     const t = this.ctx.currentTime;
     const dest = this.at(x, y, z, 0.5, 0.35);
     const fm = this.formant(dest, [[700, 1], [1700, 0.4]], 4);
