@@ -1406,12 +1406,14 @@ function showHitCard(animal, zone, local, res, perfect) {
 // ---------- Paisaje sonoro ----------
 // Pájaros que cantan desde donde están, animales que se hacen oír de vez en cuando
 // y el agua del lago cuando te acercas a la orilla. Todo suena en 3D desde su sitio.
+// [mínimo, máximo] de segundos entre llamadas de cada ejemplar y distancia a la que se oye.
+// En el campo real hay mucho silencio: mejor pocas llamadas y bien puestas.
 const VOICE = {
-  ciervo: [25, 70, 700], gamo: [30, 70, 350], corzo: [60, 140, 250], jabali: [12, 35, 160], zorro: [70, 160, 300],
-  muflon: [40, 100, 200], cabra: [40, 100, 200], cabra_h: [45, 110, 200], bufalo: [30, 80, 350], leon: [35, 80, 1000],
-  leona: [50, 120, 300], elefante: [30, 80, 800], hipopotamo: [18, 45, 500], cocodrilo: [60, 140, 150], gorila: [35, 90, 400],
+  ciervo: [50, 140, 700], gamo: [60, 150, 350], corzo: [90, 220, 250], jabali: [25, 70, 160], zorro: [120, 260, 300],
+  muflon: [70, 180, 200], cabra: [70, 180, 200], cabra_h: [80, 200, 200], bufalo: [60, 150, 350], leon: [70, 160, 1000],
+  leona: [90, 200, 300], elefante: [60, 150, 800], hipopotamo: [35, 90, 500], cocodrilo: [120, 260, 150], gorila: [70, 170, 400],
 };
-const BIRD_T = { perdiz: [7, 16], tortola: [5, 11], zorzal: [4, 10], pato: [5, 12], ciguena: [18, 35], flamenco: [6, 14], agachadiza: [30, 60] };
+const BIRD_T = { perdiz: [12, 28], tortola: [8, 20], zorzal: [7, 18], pato: [9, 22], ciguena: [30, 60], flamenco: [10, 24], agachadiza: [40, 80] };
 const scape = { t: 0, acc: 0, songT: 2, gap: 0, water: { near: 0, x: 0, z: 0 } };
 function updateSoundscape(dt) {
   scape.acc += dt;
@@ -1483,11 +1485,11 @@ function updateSoundscape(dt) {
   // Pajarillos en los árboles de alrededor (cantan más donde hay bosque).
   if (scape.songT <= 0) {
     const forest = forestAt(p.x, p.z);
-    scape.songT = (forest > 0.05 ? 0.7 : 1.8) + Math.random() * 3;
+    scape.songT = (forest > 0.05 ? 1.6 : 3.5) + Math.random() * 5;
     if (!(sfx.ctx && sfx.ctx.currentTime < sfx.birdsMutedUntil)) {
       const a = Math.random() * Math.PI * 2, r = 12 + Math.random() * 45;
       const x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r;
-      if (waterDepth(x, z) < 0) sfx.bird('pajaro', x, groundAt(x, z) + 4 + Math.random() * 5, z, 0.8);
+      if (waterDepth(x, z) < 0) sfx.bird('pajaro', x, groundAt(x, z) + 4 + Math.random() * 5, z, 0.55);
     }
   }
 }

@@ -69,6 +69,60 @@ export class Sfx {
     wind.connect(this.windFilter).connect(this.windGain).connect(this.bus);
     wind.start();
     this.initWater();
+    this.loadRecordings();
+  }
+
+  // ---------- Grabaciones reales (opcionales) ----------
+  // assets/sounds/manifest.json -> { "ciervo": ["berrea1.mp3", "berrea2.mp3"], "perdiz": "perdiz.ogg", "agua": "orilla.mp3" }
+  // Si una especie tiene grabaciones, suenan ellas (con pequeñas variaciones); si no, la voz sintetizada.
+  async loadRecordings() {
+    this.rec = {};
+    let manifest;
+    try {
+      const r = await fetch('assets/sounds/manifest.json');
+      if (!r.ok) return;
+      manifest = await r.json();
+    } catch {
+      return;
+    }
+    await Promise.all(Object.entries(manifest).map(async ([key, files]) => {
+      const list = [];
+      for (const f of [].concat(files)) {
+        try {
+          const data = await (await fetch('assets/sounds/' + f)).arrayBuffer();
+          list.push(await this.ctx.decodeAudioData(data));
+        } catch {
+          /* archivo que falta o que no se puede leer: se ignora */
+        }
+      }
+      if (list.length) this.rec[key] = list;
+    }));
+    if (this.rec.agua) this.useWaterRecording(this.rec.agua[0]);
+  }
+
+  playRec(key, x, y, z, vol = 1) {
+    const list = this.rec && this.rec[key];
+    if (!list) return false;
+    const d = this.distTo(x, y, z);
+    const src = this.ctx.createBufferSource();
+    src.buffer = list[Math.floor(Math.random() * list.length)];
+    src.playbackRate.value = 0.94 + Math.random() * 0.12;
+    src.connect(this.at(x, y, z, vol, 0.45));
+    src.start(this.ctx.currentTime + Math.min(3, d / 343));
+    return true;
+  }
+
+  useWaterRecording(buf) {
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const g = this.ctx.createGain();
+    g.gain.value = 1.6;
+    src.connect(g).connect(this.waterOut);
+    src.start();
+    // La ola sintetizada se retira: manda la grabación.
+    this.waterWave.disconnect();
+    this.waterWave = { gain: { setTargetAtTime() {} } };
   }
 
   get ready() {
@@ -654,8 +708,10 @@ export class Sfx {
     if (!this.ctx) return;
     const d = this.distTo(x, y, z);
     if (d > 220) return;
+    if (this.playRec(kind, x, y, z, vol)) return;
     const ctx = this.ctx, t = ctx.currentTime + d / 343 + 0.02;
-    const dest = this.at(x, y, z, 0.55 * vol, 0.25);
+    // Cada ejemplar canta un poco distinto: tono, fuerza y ritmo.
+    const dest = this.at(x, y, z, 0.42 * vol * (0.75 + Math.random() * 0.5), 0.25);
     const R = Math.random;
     if (kind === 'perdiz') {
       // Perdiz roja: "cha-chá, chachará…", áspero y rítmico.
@@ -750,12 +806,29 @@ export class Sfx {
     if (!this.ctx) return;
     const d = this.distTo(x, y, z);
     if (d > 1400) return;
+    if (this.playRec(key, x, y, z, vol)) return;
     const ctx = this.ctx, t = ctx.currentTime + Math.min(3, d / 343) + 0.02;
-    const dest = this.at(x, y, z, vol, 0.55);
+    const dest = this.at(x, y, z, vol * 0.85, 0.55);
     const R = Math.random;
     const groan = (tt, len, f0, f1, forms, g = 1, vib = 0) => {
-      const fm = this.formant(dest, forms, 3.5);
-      const o = this.osc('sawtooth', tt, len, f0, f1, fm, g, Math.min(0.12, len / 4), 'lin');
+      // Nunca dos iguales: tono, duración y timbre cambian un poco en cada llamada.
+      const j = 0.9 + R() * 0.2;
+      f0 *= j;
+      f1 *= j * (0.95 + R() * 0.1);
+      len *= 0.85 + R() * 0.3;
+      forms = forms.map(([f, gg]) => [f * (0.92 + R() * 0.16), gg]);
+      const fm = this.formant(dest, forms, 2.6);
+      // Menos zumbido y más aire: la voz de un animal es sobre todo respiración que vibra.
+      const o = this.osc('sawtooth', tt, len, f0, f1, fm, g * 0.55, Math.min(0.12, len / 4), 'lin');
+      // Temblor irregular de la voz.
+      const jit = ctx.createOscillator();
+      jit.type = 'triangle';
+      jit.frequency.value = 3 + R() * 4;
+      const jg = ctx.createGain();
+      jg.gain.value = f0 * 0.025;
+      jit.connect(jg).connect(o.frequency);
+      jit.start(tt);
+      jit.stop(tt + len);
       if (vib) {
         const v = ctx.createOscillator();
         v.frequency.value = vib;
@@ -766,7 +839,7 @@ export class Sfx {
         v.stop(tt + len);
       }
       // Aire de la respiración, que es lo que hace que suene a bicho y no a sintetizador.
-      this.noiseBurst(tt, len, dest, g * 0.35, forms[0][0] * 1.3, 1.2);
+      this.noiseBurst(tt, len, fm, g * 0.9, forms[0][0] * 1.1, 0.7);
     };
     switch (key) {
       case 'ciervo': {

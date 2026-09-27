@@ -53,3 +53,25 @@ Los animales se generan por código, pero el juego puede usar modelos de verdad 
 - Opcionales: `scale` (si no, se ajusta al tamaño del animal), `rotationY` (en radianes, si el modelo no mira hacia +Z) y `offsetY`.
 - Las zonas de impacto siguen siendo las del animal generado, así que conviene que el modelo tenga proporciones realistas.
 - Revisa la licencia de cada modelo (CC0 o CC-BY con atribución).
+
+## Sonidos reales (opcional)
+
+Todos los sonidos se sintetizan en el navegador, pero puedes sustituir cualquiera por grabaciones reales.
+Copia los archivos (`.mp3`, `.ogg` o `.wav`) en `assets/sounds/` y declara cuáles usar en
+`assets/sounds/manifest.json`. Puedes poner varias grabaciones por especie; el juego elige una al azar
+y le cambia un poco el tono cada vez para que no suenen repetidas:
+
+```json
+{
+  "ciervo": ["berrea1.mp3", "berrea2.mp3"],
+  "perdiz": "perdiz-roja.ogg",
+  "tortola": "tortola.mp3",
+  "agua": "orilla-lago.mp3"
+}
+```
+
+Claves disponibles: `ciervo`, `gamo`, `corzo`, `jabali`, `zorro`, `lobo`, `muflon`, `cabra`, `bufalo`, `leon`,
+`leona`, `elefante`, `hipopotamo`, `cocodrilo`, `gorila`, `perdiz`, `tortola`, `zorzal`, `agachadiza`, `pato`,
+`ciguena`, `flamenco`, `pajaro` (pajarillos del bosque) y `agua` (bucle de la orilla del lago).
+Hay grabaciones libres en [xeno-canto](https://xeno-canto.org) (aves) y [freesound](https://freesound.org);
+revisa la licencia de cada una.

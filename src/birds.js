@@ -97,7 +97,8 @@ function buildBird(key) {
     { p: [0, 0.05, 0.18], w: nk ? 0.08 : 0.1, h: nk ? 0.08 : 0.1 },
     { p: [0, headY * 0.55, headZ - 0.06 + (sp.flamingo ? 0.1 : 0)], w: neckW, h: neckW },
     { p: [0, headY, headZ], w: 0.02, h: 0.02 },
-  ], 3), [0, 1, 0], 12, (t, c, s) => {
+    // En los cuellos largos (casi verticales) la referencia no puede ser "arriba": el tubo se retorcía.
+  ], 3), nk ? [0, 0, 1] : [0, 1, 0], 12, (t, c, s) => {
     if (nk) return C.head;
     if (duck) return mixc(C.head, C.throat, sm(0.25, 0.4, t) * (1 - sm(0.45, 0.6, t)));
     if (key === 'tortola') return mixc(C.head, C.dark, sm(0.3, 0.45, t) * (1 - sm(0.5, 0.65, t)) * sm(0.0, 0.6, Math.abs(c)));
@@ -459,8 +460,15 @@ export class Birds {
       b.wander -= dt;
       if (b.wander <= 0) {
         b.wander = 1 + Math.random() * 4;
-        b.yaw += (Math.random() - 0.5) * 2;
+        b.yawTo = b.yaw + (Math.random() - 0.5) * (sp.legLen ? 1.2 : 2);
         b.speed0 = Math.random() < 0.5 ? (b.state === 'swim' ? 0.4 : 0.25) : 0;
+      }
+      // Gira poco a poco, sin tirones.
+      if (b.yawTo !== undefined) {
+        let dy = b.yawTo - b.yaw;
+        while (dy > Math.PI) dy -= Math.PI * 2;
+        while (dy < -Math.PI) dy += Math.PI * 2;
+        b.yaw += clamp(dy, -dt * 1.5, dt * 1.5);
       }
       const v = b.speed0 || 0;
       const nx = b.pos.x + Math.sin(b.yaw) * v * dt, nz = b.pos.z + Math.cos(b.yaw) * v * dt;
@@ -469,9 +477,11 @@ export class Birds {
       if (ok) {
         b.pos.x = nx;
         b.pos.z = nz;
-      } else b.yaw += Math.PI * 0.5;
+      } else b.yawTo = b.yaw + Math.PI * 0.5;
       b.pos.y = this.floor(b) + (b.state === 'swim' ? Math.sin(b.t * 1.6) * 0.01 : 0);
-      b.pitch = b.state === 'ground' && v === 0 ? Math.max(0, Math.sin(b.t * 3)) * 0.5 : 0;
+      // Picotear inclina el cuerpo; las zancudas (flamenco, cigüeña) no se balancean enteras con las patas.
+      const peck = b.state === 'ground' && v === 0 && !sp.legLen ? Math.max(0, Math.sin(b.t * 3)) * 0.5 : 0;
+      b.pitch += (peck - b.pitch) * Math.min(1, dt * 8);
       b.roll = 0;
       if (player && b.delay < 0) {
         const dist = Math.hypot(player.x - b.pos.x, player.z - b.pos.z);
