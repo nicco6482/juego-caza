@@ -221,7 +221,7 @@ function boot() {
       if (game.state !== 'playing') return;
       const pan = Math.sin(relativeBearing(a.pos));
       if (a.key === 'lobo') sfx.howl(a.distToPlayer, pan);
-      else sfx.roar(a.distToPlayer, pan);
+      else sfx.voice(a.key, a.pos.x, a.pos.y + 1.2 * a.scale, a.pos.z, 1.2);
     },
     onAlarm: (a) => {
       if (game.state !== 'playing') return;
@@ -248,7 +248,7 @@ function boot() {
       if (game.state !== 'playing') return;
       const d = b.pos.distanceTo(player.pos), pan = Math.sin(relativeBearing(b.pos));
       sfx.flush(d, pan, !!b.sp.duck);
-      if (['perdiz', 'pato', 'agachadiza', 'flamenco'].includes(b.key)) sfx.birdCall(b.key, d, pan);
+      if (['perdiz', 'pato', 'agachadiza', 'flamenco'].includes(b.key)) sfx.bird(b.key, b.pos.x, b.pos.y, b.pos.z, 1.3);
     },
   });
   makeBulletMesh();
@@ -1156,7 +1156,8 @@ function updatePlayer(dt) {
     const stride = player.sprinting ? 1.5 : 0.8;
     if (player.stepAcc > stride) {
       player.stepAcc = 0;
-      sfx.step({ stand: 0.12, crouch: 0.06, prone: 0.035 }[player.stance] * (player.sprinting ? 1.8 : 1));
+      if (waterDepth(player.pos.x, player.pos.z) > 0.02) sfx.splashStep(player.sprinting ? 0.45 : 0.28);
+      else sfx.step({ stand: 0.12, crouch: 0.06, prone: 0.035 }[player.stance] * (player.sprinting ? 1.8 : 1));
     }
     player.bob += v * dt * (player.sprinting ? 1.5 : 2.2);
   }
@@ -1402,6 +1403,95 @@ function showHitCard(animal, zone, local, res, perfect) {
   cardT = setTimeout(() => el.classList.remove('show'), 5000);
 }
 
+// ---------- Paisaje sonoro ----------
+// Pájaros que cantan desde donde están, animales que se hacen oír de vez en cuando
+// y el agua del lago cuando te acercas a la orilla. Todo suena en 3D desde su sitio.
+const VOICE = {
+  ciervo: [25, 70, 700], gamo: [30, 70, 350], corzo: [60, 140, 250], jabali: [12, 35, 160], zorro: [70, 160, 300],
+  muflon: [40, 100, 200], cabra: [40, 100, 200], cabra_h: [45, 110, 200], bufalo: [30, 80, 350], leon: [35, 80, 1000],
+  leona: [50, 120, 300], elefante: [30, 80, 800], hipopotamo: [18, 45, 500], cocodrilo: [60, 140, 150], gorila: [35, 90, 400],
+};
+const BIRD_T = { perdiz: [7, 16], tortola: [5, 11], zorzal: [4, 10], pato: [5, 12], ciguena: [18, 35], flamenco: [6, 14], agachadiza: [30, 60] };
+const scape = { t: 0, acc: 0, songT: 2, gap: 0, water: { near: 0, x: 0, z: 0 } };
+function updateSoundscape(dt) {
+  scape.acc += dt;
+  scape.gap -= dt;
+  scape.songT -= dt;
+  const p = player.pos;
+  if (scape.acc >= 0.25) {
+    const step = scape.acc;
+    scape.acc = 0;
+    // Agua: el punto de orilla más cercano, buscando en círculos alrededor.
+    let best = null;
+    if (Math.hypot(p.x - LAKE.x, p.z - LAKE.z) < LAKE.r * 1.6 + 90) {
+      for (const r of [0, 5, 11, 19, 30, 45, 65, 90]) {
+        for (let k = 0; k < (r ? 12 : 1); k++) {
+          const a = (k / 12) * Math.PI * 2;
+          const x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r;
+          if (waterDepth(x, z) > 0.05) {
+            best = { x, z, d: r };
+            break;
+          }
+        }
+        if (best) break;
+      }
+    }
+    const near = best ? clamp(1 - best.d / 90, 0, 1) : 0;
+    const w = scape.water;
+    w.near += (near - w.near) * 0.3;
+    if (best) {
+      w.x = best.x;
+      w.z = best.z;
+    }
+    sfx.water(w.near, w.x, LAKE.level, w.z, step, waterDepth(p.x, p.z) > 0.02 && player.moving);
+
+    // Aves cercanas: cada especie con su canto y su ritmo.
+    const muted = sfx.ctx && sfx.ctx.currentTime < sfx.birdsMutedUntil;
+    for (const b of birds.list) {
+      if (b.state === 'dead' || b.state === 'gone' || b.state === 'carried') continue;
+      const bt = BIRD_T[b.key];
+      if (!bt) continue;
+      const d = Math.hypot(b.pos.x - p.x, b.pos.z - p.z);
+      if (d > 110) continue;
+      if (b.callT === undefined) b.callT = Math.random() * bt[1];
+      b.callT -= step;
+      if (b.callT <= 0) {
+        b.callT = bt[0] + Math.random() * (bt[1] - bt[0]);
+        // Tras un disparo el campo se calla un rato; los que vuelan sí se oyen.
+        if ((muted && b.state !== 'fly' && b.state !== 'pass') || scape.gap > 0) continue;
+        sfx.bird(b.key, b.pos.x, b.pos.y + 0.3, b.pos.z, d < 30 ? 1.3 : 1);
+        scape.gap = 0.3;
+      }
+    }
+
+    // Voces de los animales.
+    for (const a of fauna.animals) {
+      const v = VOICE[a.key];
+      if (!v || !a.alive || a.state === 'flee') continue;
+      const d = a.distToPlayer ?? a.pos.distanceTo(p);
+      if (d > v[2]) continue;
+      if (a.voiceT === undefined) a.voiceT = Math.random() * v[1];
+      a.voiceT -= step;
+      if (a.voiceT <= 0) {
+        a.voiceT = v[0] + Math.random() * (v[1] - v[0]);
+        if (scape.gap > 0) continue;
+        sfx.voice(a.key, a.pos.x, a.pos.y + 1.1 * a.scale, a.pos.z, 1);
+        scape.gap = 0.6;
+      }
+    }
+  }
+  // Pajarillos en los árboles de alrededor (cantan más donde hay bosque).
+  if (scape.songT <= 0) {
+    const forest = forestAt(p.x, p.z);
+    scape.songT = (forest > 0.05 ? 0.7 : 1.8) + Math.random() * 3;
+    if (!(sfx.ctx && sfx.ctx.currentTime < sfx.birdsMutedUntil)) {
+      const a = Math.random() * Math.PI * 2, r = 12 + Math.random() * 45;
+      const x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r;
+      if (waterDepth(x, z) < 0) sfx.bird('pajaro', x, groundAt(x, z) + 4 + Math.random() * 5, z, 0.8);
+    }
+  }
+}
+
 // ---------- Bucle principal ----------
 let last = performance.now();
 let todTimer = 0;
@@ -1553,6 +1643,10 @@ function frame(now) {
   ship.update(realDt, wind, game.state === 'playing' ? clamp(1 - game.time / HUNT_TIME, 0, 1) : 0);
   hud.update(realDt);
   sfx.update(wind.speed);
+  if (game.state === 'playing') {
+    sfx.listen(camera);
+    updateSoundscape(realDt);
+  } else sfx.water(0, scape.water.x, LAKE.level, scape.water.z, realDt);
   post.render(realDt);
 }
 
@@ -1628,4 +1722,4 @@ requestAnimationFrame(() => setTimeout(() => {
 
 // Acceso para depuración desde la consola.
 window.__dogs = null;
-window.__sierra = { get nessie() { return nessie; }, game, player, get fauna() { return fauna; }, get birds() { return birds; }, camera, startHunt, endHunt, fire, predict, wind };
+window.__sierra = { get nessie() { return nessie; }, game, player, sfx, get fauna() { return fauna; }, get birds() { return birds; }, camera, startHunt, endHunt, fire, predict, wind };

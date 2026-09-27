@@ -19,6 +19,15 @@ export class Sfx {
     this.master = ctx.createGain();
     this.master.gain.value = 0.8;
     this.master.connect(ctx.destination);
+    // Todo pasa por un compresor suave: los disparos pegan fuerte sin saturar y lo lejano se oye.
+    this.bus = ctx.createDynamicsCompressor();
+    this.bus.threshold.value = -20;
+    this.bus.knee.value = 12;
+    this.bus.ratio.value = 3.5;
+    this.bus.attack.value = 0.004;
+    this.bus.release.value = 0.25;
+    this.bus.connect(this.master);
+    this.listener = { x: 0, y: 0, z: 0 };
 
     // Reverberación larga y abierta: el eco de la sierra.
     const len = ctx.sampleRate * 3.2;
@@ -35,7 +44,7 @@ export class Sfx {
     this.reverb.buffer = ir;
     this.reverbGain = ctx.createGain();
     this.reverbGain.gain.value = 0.5;
-    this.reverb.connect(this.reverbGain).connect(this.master);
+    this.reverb.connect(this.reverbGain).connect(this.bus);
 
     this.noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const nd = this.noise.getChannelData(0);
@@ -57,8 +66,9 @@ export class Sfx {
     this.windFilter.frequency.value = 500;
     this.windGain = ctx.createGain();
     this.windGain.gain.value = 0.12;
-    wind.connect(this.windFilter).connect(this.windGain).connect(this.master);
+    wind.connect(this.windFilter).connect(this.windGain).connect(this.bus);
     wind.start();
+    this.initWater();
   }
 
   get ready() {
@@ -83,7 +93,7 @@ export class Sfx {
     g.gain.value = vol;
     const p = this.ctx.createStereoPanner();
     p.pan.value = Math.max(-1, Math.min(1, pan));
-    g.connect(p).connect(this.master);
+    g.connect(p).connect(this.bus);
     if (rev > 0) {
       const r = this.ctx.createGain();
       r.gain.value = rev;
@@ -129,7 +139,7 @@ export class Sfx {
     bp.Q.value = 3;
     const g = ctx.createGain();
     this.env(g, t, 0.001, vol, 0.05);
-    n.connect(bp).connect(g).connect(this.master);
+    n.connect(bp).connect(g).connect(this.bus);
     n.start(t);
     n.stop(t + 0.1);
   }
@@ -470,7 +480,7 @@ export class Sfx {
     f.Q.value = 0.8;
     const g = ctx.createGain();
     this.env(g, t, 0.01, vol, 0.12);
-    n.connect(f).connect(g).connect(this.master);
+    n.connect(f).connect(g).connect(this.bus);
     n.start(t, Math.random());
     n.stop(t + 0.2);
   }
@@ -484,7 +494,7 @@ export class Sfx {
       o.frequency.exponentialRampToValueAtTime(35, t + dt + 0.12);
       const g = ctx.createGain();
       this.env(g, t + dt, 0.01, vol * v, 0.14);
-      o.connect(g).connect(this.master);
+      o.connect(g).connect(this.bus);
       o.start(t + dt);
       o.stop(t + dt + 0.2);
     }
@@ -502,7 +512,7 @@ export class Sfx {
     g.gain.setValueAtTime(0.0001, t);
     g.gain.linearRampToValueAtTime(0.07, t + (inhale ? 0.35 : 0.15));
     g.gain.linearRampToValueAtTime(0.0001, t + (inhale ? 0.6 : 0.7));
-    n.connect(f).connect(g).connect(this.master);
+    n.connect(f).connect(g).connect(this.bus);
     n.start(t, Math.random());
     n.stop(t + 0.8);
   }
@@ -526,14 +536,437 @@ export class Sfx {
     }
   }
 
+  // ---------- Sonido en 3D ----------
+  // El oyente va con la cámara; cada fuente suena desde su sitio, se apaga con la distancia,
+  // pierde agudos a lo lejos (el aire se los come) y gana eco del valle.
+  listen(cam) {
+    if (!this.ctx) return;
+    const l = this.ctx.listener, t = this.ctx.currentTime;
+    const e = cam.matrixWorld.elements;
+    const fx = -e[8], fy = -e[9], fz = -e[10], ux = e[4], uy = e[5], uz = e[6];
+    this.listener.x = cam.position.x;
+    this.listener.y = cam.position.y;
+    this.listener.z = cam.position.z;
+    if (l.positionX) {
+      l.positionX.setTargetAtTime(cam.position.x, t, 0.02);
+      l.positionY.setTargetAtTime(cam.position.y, t, 0.02);
+      l.positionZ.setTargetAtTime(cam.position.z, t, 0.02);
+      l.forwardX.setTargetAtTime(fx, t, 0.02);
+      l.forwardY.setTargetAtTime(fy, t, 0.02);
+      l.forwardZ.setTargetAtTime(fz, t, 0.02);
+      l.upX.setTargetAtTime(ux, t, 0.02);
+      l.upY.setTargetAtTime(uy, t, 0.02);
+      l.upZ.setTargetAtTime(uz, t, 0.02);
+    } else {
+      l.setPosition(cam.position.x, cam.position.y, cam.position.z);
+      l.setOrientation(fx, fy, fz, ux, uy, uz);
+    }
+  }
+
+  distTo(x, y, z) {
+    const L = this.listener;
+    return Math.hypot(x - L.x, y - L.y, z - L.z);
+  }
+
+  // Devuelve la entrada de una fuente situada en (x, y, z).
+  at(x, y, z, vol = 1, rev = 0.3) {
+    const ctx = this.ctx;
+    const d = this.distTo(x, y, z);
+    const g = ctx.createGain();
+    g.gain.value = vol;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = Math.max(700, 16000 * Math.exp(-d / 180));
+    const p = ctx.createPanner();
+    p.panningModel = 'HRTF';
+    p.distanceModel = 'inverse';
+    p.refDistance = 6;
+    p.rolloffFactor = 1.15;
+    p.maxDistance = 3000;
+    if (p.positionX) {
+      p.positionX.value = x;
+      p.positionY.value = y;
+      p.positionZ.value = z;
+    } else p.setPosition(x, y, z);
+    g.connect(lp).connect(p).connect(this.bus);
+    if (rev > 0) {
+      const r = ctx.createGain();
+      r.gain.value = rev * Math.min(1.6, 0.25 + d / 120) * Math.min(1, 25 / (d + 10));
+      lp.connect(r).connect(this.reverb);
+    }
+    return g;
+  }
+
+  // Utilidades de síntesis.
+  osc(type, t, len, f0, f1, dest, gain = 1, a = 0.01, curve = 'exp') {
+    const ctx = this.ctx;
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    if (f1 !== f0) {
+      if (curve === 'exp') o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + len);
+      else o.frequency.linearRampToValueAtTime(f1, t + len);
+    }
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    o.connect(g).connect(dest);
+    o.start(t);
+    o.stop(t + len + 0.05);
+    return o;
+  }
+
+  formant(dest, freqs, q = 5) {
+    // Filtros de formantes en paralelo: dan el timbre de garganta o de pico.
+    const ctx = this.ctx;
+    const inp = ctx.createGain();
+    for (const [f, g] of freqs) {
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = f;
+      bp.Q.value = q;
+      const gg = ctx.createGain();
+      gg.gain.value = g;
+      inp.connect(bp).connect(gg).connect(dest);
+    }
+    return inp;
+  }
+
+  noiseBurst(t, len, dest, gain = 1, f = 1000, q = 1, type = 'bandpass') {
+    const ctx = this.ctx;
+    const n = this.noiseSrc();
+    const bp = ctx.createBiquadFilter();
+    bp.type = type;
+    bp.frequency.value = f;
+    bp.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + Math.min(0.01, len / 3));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    n.connect(bp).connect(g).connect(dest);
+    n.start(t, Math.random() * 1.5);
+    n.stop(t + len + 0.05);
+  }
+
+  // ---------- Aves ----------
+  bird(kind, x, y, z, vol = 1) {
+    if (!this.ctx) return;
+    const d = this.distTo(x, y, z);
+    if (d > 220) return;
+    const ctx = this.ctx, t = ctx.currentTime + d / 343 + 0.02;
+    const dest = this.at(x, y, z, 0.55 * vol, 0.25);
+    const R = Math.random;
+    if (kind === 'perdiz') {
+      // Perdiz roja: "cha-chá, chachará…", áspero y rítmico.
+      const reps = 3 + Math.floor(R() * 3);
+      const f0 = 1100 + R() * 250;
+      const fm = this.formant(dest, [[f0 * 1.4, 1], [f0 * 2.6, 0.5]], 4);
+      for (let i = 0; i < reps; i++) {
+        const tt = t + i * 0.42;
+        this.osc('sawtooth', tt, 0.06, f0, f0 * 0.8, fm, 0.9);
+        this.osc('sawtooth', tt + 0.1, 0.09, f0 * 1.1, f0 * 0.85, fm, 1);
+        this.osc('sawtooth', tt + 0.22, 0.12, f0 * 1.2, f0 * 0.75, fm, 0.9);
+        this.noiseBurst(tt + 0.1, 0.08, dest, 0.25, f0 * 2, 2);
+      }
+    } else if (kind === 'tortola') {
+      // Tórtola: ronroneo grave "turrr, turrr" (un zumbido modulado muy rápido).
+      for (let i = 0; i < 3; i++) {
+        const tt = t + i * 0.75;
+        const o = ctx.createOscillator();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(500 + R() * 30, tt);
+        o.frequency.linearRampToValueAtTime(440, tt + 0.55);
+        const am = ctx.createOscillator();
+        am.frequency.value = 26 + R() * 6;
+        const amg = ctx.createGain();
+        amg.gain.value = 0.5;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, tt);
+        g.gain.exponentialRampToValueAtTime(0.9, tt + 0.08);
+        g.gain.setValueAtTime(0.9, tt + 0.4);
+        g.gain.exponentialRampToValueAtTime(0.0001, tt + 0.6);
+        const vca = ctx.createGain();
+        vca.gain.value = 0.5;
+        am.connect(amg).connect(vca.gain);
+        o.connect(vca).connect(g).connect(dest);
+        o.start(tt);
+        am.start(tt);
+        o.stop(tt + 0.65);
+        am.stop(tt + 0.65);
+      }
+    } else if (kind === 'zorzal') {
+      // Zorzal común: frases silbadas y aflautadas que repite dos o tres veces.
+      let tt = t;
+      for (let p = 0; p < 3; p++) {
+        const f = 2200 + R() * 2600, f2 = f * (0.7 + R() * 0.7), n = 2 + Math.floor(R() * 2), len = 0.08 + R() * 0.12;
+        for (let k = 0; k < n; k++) {
+          this.osc('sine', tt, len, f, f2, dest, 0.7, 0.008);
+          this.osc('sine', tt, len, f * 2, f2 * 2, dest, 0.12, 0.008);
+          tt += len + 0.07;
+        }
+        tt += 0.25 + R() * 0.2;
+      }
+    } else if (kind === 'agachadiza') {
+      // "¡Scaap!" ronco al arrancar.
+      this.osc('square', t, 0.14, 2600, 1700, this.formant(dest, [[2400, 1], [4200, 0.4]], 3), 0.7);
+      this.noiseBurst(t, 0.12, dest, 0.35, 3000, 2);
+    } else if (kind === 'pato') {
+      // Ánade real: "CUAC cuac cuac cuac", nasal, cada uno más flojo.
+      const fm = this.formant(dest, [[950, 1], [2300, 0.6], [3300, 0.25]], 6);
+      const n = 3 + Math.floor(R() * 3);
+      for (let i = 0; i < n; i++) {
+        const tt = t + i * 0.26, v = 1 - i * 0.15;
+        this.osc('sawtooth', tt, 0.2, 290, 230, fm, v, 0.012);
+        this.osc('sawtooth', tt, 0.2, 293, 232, fm, v * 0.6, 0.012);
+      }
+    } else if (kind === 'ciguena') {
+      // Cigüeña: crotoreo, un traqueteo de pico cada vez más rápido.
+      let tt = t, gap = 0.11;
+      for (let i = 0; i < 26; i++) {
+        this.noiseBurst(tt, 0.025, dest, 0.9, 1400 + R() * 400, 6);
+        this.osc('triangle', tt, 0.02, 700, 500, dest, 0.3, 0.002);
+        tt += gap;
+        gap = Math.max(0.05, gap * 0.95);
+      }
+    } else if (kind === 'flamenco') {
+      // Flamenco: graznido de ganso, nasal y repetido.
+      const fm = this.formant(dest, [[1100, 1], [2600, 0.5]], 5);
+      for (let i = 0; i < 4; i++) this.osc('sawtooth', t + i * 0.24, 0.16, 720 + R() * 80, 600, fm, 0.9, 0.015);
+    } else {
+      // Pajarillos: gorjeos rápidos con quiebros.
+      const base = 2600 + R() * 2400;
+      let tt = t;
+      for (let i = 0; i < 4 + Math.floor(R() * 7); i++) {
+        const len = 0.03 + R() * 0.07;
+        this.osc('sine', tt, len, base * (0.8 + R() * 0.5), base * (0.9 + R() * 0.6), dest, 0.5, 0.004);
+        tt += len + 0.02 + R() * 0.06;
+      }
+    }
+  }
+
+  // ---------- Voces de los animales ----------
+  voice(key, x, y, z, vol = 1) {
+    if (!this.ctx) return;
+    const d = this.distTo(x, y, z);
+    if (d > 1400) return;
+    const ctx = this.ctx, t = ctx.currentTime + Math.min(3, d / 343) + 0.02;
+    const dest = this.at(x, y, z, vol, 0.55);
+    const R = Math.random;
+    const groan = (tt, len, f0, f1, forms, g = 1, vib = 0) => {
+      const fm = this.formant(dest, forms, 3.5);
+      const o = this.osc('sawtooth', tt, len, f0, f1, fm, g, Math.min(0.12, len / 4), 'lin');
+      if (vib) {
+        const v = ctx.createOscillator();
+        v.frequency.value = vib;
+        const vg = ctx.createGain();
+        vg.gain.value = f0 * 0.04;
+        v.connect(vg).connect(o.frequency);
+        v.start(tt);
+        v.stop(tt + len);
+      }
+      // Aire de la respiración, que es lo que hace que suene a bicho y no a sintetizador.
+      this.noiseBurst(tt, len, dest, g * 0.35, forms[0][0] * 1.3, 1.2);
+    };
+    switch (key) {
+      case 'ciervo': {
+        // Berrea: bramidos largos y roncos con eco de valle.
+        let tt = t;
+        for (let i = 0; i < 1 + Math.floor(R() * 3); i++) {
+          const len = 1.2 + R() * 0.9, f = 100 + R() * 25;
+          groan(tt, len, f * 0.8, f * 0.7, [[380, 1], [900, 0.5], [2100, 0.15]], 1.1, 7);
+          tt += len + 0.3 + R() * 0.4;
+        }
+        break;
+      }
+      case 'gamo': {
+        // Ronca del gamo: eructos graves y cortos en serie.
+        for (let i = 0; i < 4 + Math.floor(R() * 4); i++) groan(t + i * 0.55, 0.3, 75, 62, [[320, 1], [760, 0.5]], 1);
+        break;
+      }
+      case 'corzo':
+      case 'corza':
+        for (let i = 0; i < 2 + Math.floor(R() * 2); i++) groan(t + i * 0.6, 0.18, 520, 300, [[1100, 1], [2300, 0.5]], 0.9);
+        break;
+      case 'jabali':
+        // Gruñidos del jabalí: pulsos roncos, nasales.
+        for (let i = 0; i < 3 + Math.floor(R() * 4); i++) {
+          const tt = t + i * (0.25 + R() * 0.25);
+          groan(tt, 0.16, 110, 85, [[420, 1], [1000, 0.4]], 0.9);
+          this.noiseBurst(tt, 0.16, dest, 0.5, 600, 2);
+        }
+        break;
+      case 'zorro':
+        // Grito del zorro: un chillido ronco que asusta de noche.
+        groan(t, 0.7, 900, 650, [[1400, 1], [2800, 0.5]], 0.8, 11);
+        break;
+      case 'lobo':
+        this.howl(d, 0);
+        break;
+      case 'muflon':
+      case 'cabra':
+      case 'cabra_h':
+        // Balido.
+        groan(t, 0.65, 340 + R() * 60, 300, [[850, 1], [1900, 0.5]], 0.8, 6.5);
+        break;
+      case 'bufalo':
+        // Mugido grave y largo.
+        groan(t, 1.3, 95, 80, [[480, 1], [1100, 0.35]], 1.1, 3);
+        break;
+      case 'leon': {
+        // Rugido del león: uno enorme y después gruñidos que se van apagando.
+        groan(t, 1.6, 120, 95, [[330, 1], [800, 0.6], [1600, 0.2]], 1.4, 5);
+        this.osc('sine', t, 1.6, 60, 45, dest, 0.8, 0.15, 'lin');
+        let tt = t + 1.9, gap = 0.55;
+        for (let i = 0; i < 8; i++) {
+          groan(tt, 0.35, 105, 85, [[300, 1], [700, 0.5]], 1 - i * 0.1);
+          tt += gap;
+          gap *= 1.08;
+        }
+        break;
+      }
+      case 'leona':
+        for (let i = 0; i < 3; i++) groan(t + i * 0.7, 0.4, 150, 120, [[380, 1], [900, 0.4]], 0.8);
+        break;
+      case 'elefante': {
+        // Barrito: trompetazo brillante que sube y baja, con retumbo grave.
+        const fm = this.formant(dest, [[1300, 1], [2500, 0.7], [3800, 0.3]], 1.8);
+        const o = this.osc('sawtooth', t, 1.3, 420, 520, fm, 1.2, 0.05, 'lin');
+        o.frequency.linearRampToValueAtTime(680, t + 0.35);
+        o.frequency.linearRampToValueAtTime(560, t + 1.2);
+        const v = ctx.createOscillator();
+        v.frequency.value = 9;
+        const vg = ctx.createGain();
+        vg.gain.value = 18;
+        v.connect(vg).connect(o.frequency);
+        v.start(t);
+        v.stop(t + 1.3);
+        this.noiseBurst(t, 1.2, dest, 0.3, 2400, 1);
+        this.osc('sine', t, 1.6, 28, 22, dest, 0.7, 0.2, 'lin');
+        break;
+      }
+      case 'hipopotamo':
+        // Resoplidos y "risa" del hipopótamo: bocinazos graves en serie.
+        for (let i = 0; i < 6; i++) groan(t + i * 0.32, 0.26, 140 - i * 8, 110 - i * 6, [[420, 1], [950, 0.5]], 1.1 - i * 0.1);
+        groan(t + 2.2, 0.9, 70, 55, [[300, 1]], 0.8);
+        break;
+      case 'cocodrilo':
+        // Rugido sordo que hace vibrar el agua.
+        this.osc('sine', t, 1.5, 38, 32, dest, 1, 0.2, 'lin');
+        this.noiseBurst(t, 1.3, dest, 0.5, 180, 1.5, 'lowpass');
+        break;
+      case 'gorila': {
+        // Ululatos y golpes en el pecho.
+        for (let i = 0; i < 4; i++) this.osc('sine', t + i * 0.28, 0.24, 320 + i * 60, 420 + i * 70, dest, 0.5, 0.03);
+        const t2 = t + 1.2;
+        for (let i = 0; i < 12; i++) {
+          const tt = t2 + i * 0.09;
+          this.osc('sine', tt, 0.1, 110, 70, dest, 1, 0.003);
+          this.noiseBurst(tt, 0.06, dest, 0.4, 300, 1);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  // ---------- Agua del lago ----------
+  initWater() {
+    const ctx = this.ctx;
+    // Chapoteo de las olas en la orilla: ruido filtrado que sube y baja con cada ola.
+    const src = this.noiseSrc();
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 900;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1800;
+    bp.Q.value = 0.7;
+    const waveAm = ctx.createGain();
+    waveAm.gain.value = 0.4;
+    this.waterWave = waveAm;
+    this.waterOut = ctx.createGain();
+    this.waterOut.gain.value = 0;
+    this.waterPan = ctx.createPanner();
+    this.waterPan.panningModel = 'HRTF';
+    this.waterPan.distanceModel = 'linear';
+    this.waterPan.refDistance = 1;
+    this.waterPan.maxDistance = 10000;
+    this.waterPan.rolloffFactor = 0;
+    src.connect(lp).connect(waveAm);
+    const src2 = this.noiseSrc();
+    const g2 = ctx.createGain();
+    g2.gain.value = 0.18;
+    src2.connect(bp).connect(g2).connect(waveAm);
+    waveAm.connect(this.waterOut).connect(this.waterPan).connect(this.bus);
+    const r = ctx.createGain();
+    r.gain.value = 0.25;
+    this.waterOut.connect(r).connect(this.reverb);
+    src.start();
+    src2.start(0, 0.7);
+    this.waterPhase = 0;
+    this.nextDrop = 0;
+  }
+
+  // near: 0 (lejos) a 1 (en la orilla); (x, y, z): punto de agua más cercano.
+  water(near, x, y, z, dt, wading = false) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.waterPhase += dt;
+    const p = this.waterPan;
+    if (p.positionX) {
+      p.positionX.setTargetAtTime(x, t, 0.3);
+      p.positionY.setTargetAtTime(y, t, 0.3);
+      p.positionZ.setTargetAtTime(z, t, 0.3);
+    } else p.setPosition(x, y, z);
+    // Cada ola: sube, rompe y se retira.
+    const w = this.waterPhase;
+    const wave = 0.35 + 0.65 * Math.pow(0.5 + 0.5 * Math.sin(w * 1.9 + Math.sin(w * 0.37) * 2), 3);
+    this.waterWave.gain.setTargetAtTime(wave, t, 0.08);
+    this.waterOut.gain.setTargetAtTime(near * near * 0.55 + (wading ? 0.25 : 0), t, 0.3);
+    // Gotas, pececillos que saltan y ranas cerca de la orilla.
+    if (near > 0.15 && t > this.nextDrop) {
+      this.nextDrop = t + 0.4 + Math.random() * (3 / near);
+      const a = Math.random() * Math.PI * 2, r = 4 + Math.random() * 25;
+      const px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+      const k = Math.random();
+      if (k < 0.55) this.plop(px, y, pz, 0.35 + Math.random() * 0.4);
+      else if (k < 0.8) this.frog(px, y, pz);
+      else this.plop(px, y, pz, 0.15, true);
+    }
+  }
+
+  plop(x, y, z, vol = 0.5, small = false) {
+    const t = this.ctx.currentTime;
+    const dest = this.at(x, y, z, vol, 0.3);
+    // Gota: burbuja que sube de tono rápido.
+    const f = small ? 1600 + Math.random() * 800 : 500 + Math.random() * 300;
+    this.osc('sine', t, small ? 0.05 : 0.12, f, f * 2.2, dest, 0.8, 0.003);
+    this.noiseBurst(t, small ? 0.05 : 0.18, dest, small ? 0.2 : 0.5, 2500, 0.8);
+  }
+
+  frog(x, y, z) {
+    const t = this.ctx.currentTime;
+    const dest = this.at(x, y, z, 0.5, 0.35);
+    const fm = this.formant(dest, [[700, 1], [1700, 0.4]], 4);
+    const n = 2 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < n; i++) this.osc('square', t + i * 0.2, 0.12, 190, 160, fm, 0.8, 0.01);
+  }
+
+  // Chapoteo al andar por el agua.
+  splashStep(vol = 0.3) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.noiseBurst(t, 0.25, this.bus, vol, 1400, 0.7);
+    this.noiseBurst(t + 0.05, 0.2, this.bus, vol * 0.6, 3500, 1);
+  }
+
   update(windSpeed) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     this.windGain.gain.setTargetAtTime(0.05 + windSpeed * 0.025, t, 1);
     this.windFilter.frequency.setTargetAtTime(300 + windSpeed * 70, t, 1);
-    if (t > this.nextBird) {
-      this.nextBird = t + 0.8 + Math.random() * 4;
-      if (t > this.birdsMutedUntil) this.chirp();
-    }
+
   }
 }
